@@ -14,8 +14,8 @@ class Kivun_Board_Sync {
 	const SCHEDULE     = 'kivun_board_interval';
 	const DATA_OPTION  = 'kivun_board_data';
 	const LOCK         = 'kivun_board_sync_lock';
-	const DAYS_BEFORE  = 1;
-	const DAYS_AFTER   = 14;
+	const DAYS_BEFORE  = 7;
+	const DAYS_AFTER   = 60;
 
 	public static function init() {
 		add_filter( 'cron_schedules', array( __CLASS__, 'cron_schedules' ) );

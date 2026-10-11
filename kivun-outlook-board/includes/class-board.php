@@ -160,25 +160,75 @@ class Kivun_Board {
 	/* ------------------------------------------------------------------ */
 
 	/**
-	 * Date from ?kb_date= (for previewing other days) or today.
+	 * Date for previewing another day: "?13.10.2026", "?13/10", "?2026-10-13", "?מחר"
+	 * or "?kb_date=…". Defaults to today.
 	 *
 	 * @return DateTimeImmutable
 	 */
 	private static function requested_date() {
-		$value = isset( $_GET['kb_date'] ) ? sanitize_text_field( wp_unslash( $_GET['kb_date'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
-		return self::parse_date( $value );
+		// phpcs:disable WordPress.Security.NonceVerification.Recommended
+		if ( isset( $_GET['kb_date'] ) ) {
+			return self::parse_date( sanitize_text_field( wp_unslash( $_GET['kb_date'] ) ) );
+		}
+		// The bare "?13.10.2026" form has no key, and PHP mangles dots in $_GET keys, so read the raw query string.
+		$query = isset( $_SERVER['QUERY_STRING'] ) ? wp_unslash( $_SERVER['QUERY_STRING'] ) : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+		// phpcs:enable
+		foreach ( explode( '&', (string) $query ) as $part ) {
+			if ( '' !== $part && false === strpos( $part, '=' ) ) {
+				return self::parse_date( sanitize_text_field( rawurldecode( $part ) ) );
+			}
+		}
+		return self::parse_date( null );
 	}
 
 	/**
-	 * @param string|null $value YYYY-MM-DD.
-	 * @return DateTimeImmutable Midnight of that date (or today) in the site zone.
+	 * Parses a date written in any common way (day before month, as is usual in Israel).
+	 *
+	 * Accepted: 2026-10-13, 13.10.2026, 13/10/2026, 13-10-26, 13.10, 13/10 (current year),
+	 * היום / מחר / מחרתיים / אתמול, today / tomorrow / yesterday.
+	 *
+	 * @param string|null $value Date text.
+	 * @return DateTimeImmutable Midnight of that date (or today if not understood) in the site zone.
 	 */
 	public static function parse_date( $value ) {
-		$tz = wp_timezone();
-		if ( is_string( $value ) && preg_match( '/^(\d{4})-(\d{2})-(\d{2})$/', $value, $m ) && checkdate( (int) $m[2], (int) $m[3], (int) $m[1] ) ) {
-			return ( new DateTimeImmutable( 'now', $tz ) )->setDate( (int) $m[1], (int) $m[2], (int) $m[3] )->setTime( 0, 0, 0 );
+		$tz    = wp_timezone();
+		$today = new DateTimeImmutable( 'today', $tz );
+		$value = trim( (string) $value );
+
+		$relative = array(
+			'היום'      => 0,
+			'today'     => 0,
+			'מחר'       => 1,
+			'tomorrow'  => 1,
+			'מחרתיים'   => 2,
+			'אתמול'     => -1,
+			'yesterday' => -1,
+		);
+		$key = function_exists( 'mb_strtolower' ) ? mb_strtolower( $value, 'UTF-8' ) : strtolower( $value );
+		if ( isset( $relative[ $key ] ) ) {
+			return $today->modify( sprintf( '%+d days', $relative[ $key ] ) );
 		}
-		return new DateTimeImmutable( 'today', $tz );
+
+		$y = null;
+		$m = null;
+		$d = null;
+		if ( preg_match( '/^(\d{4})\D(\d{1,2})\D(\d{1,2})$/', $value, $p ) ) {
+			list( , $y, $m, $d ) = $p;
+		} elseif ( preg_match( '/^(\d{1,2})\D(\d{1,2})(?:\D(\d{2}|\d{4}))?$/', $value, $p ) ) {
+			$d = $p[1];
+			$m = $p[2];
+			$y = isset( $p[3] ) ? $p[3] : $today->format( 'Y' );
+			if ( strlen( $y ) === 2 ) {
+				$y = '20' . $y;
+			}
+		} elseif ( preg_match( '/^(\d{4})(\d{2})(\d{2})$/', $value, $p ) ) {
+			list( , $y, $m, $d ) = $p;
+		}
+
+		if ( null !== $y && checkdate( (int) $m, (int) $d, (int) $y ) ) {
+			return $today->setDate( (int) $y, (int) $m, (int) $d );
+		}
+		return $today;
 	}
 
 	/**
