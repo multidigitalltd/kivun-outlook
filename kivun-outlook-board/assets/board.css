@@ -1,0 +1,372 @@
+/* Kivun Outlook Board – designed on a fixed 1920×1080 stage that board.js scales to fit. */
+
+.kb-board {
+	--kb-accent: #e8334a;
+	--kb-board: #3b3b3b;
+	--kb-arrow: #29b6e8;
+	--kb-line: #f1f1f1;
+	position: relative;
+	width: 100%;
+	overflow: hidden;
+	direction: rtl;
+	font-family: "Heebo", "Assistant", "Arial Hebrew", Arial, sans-serif;
+	line-height: 1.15;
+	-webkit-font-smoothing: antialiased;
+}
+
+.kb-board *,
+.kb-board *::before,
+.kb-board *::after {
+	box-sizing: border-box;
+}
+
+.kb-scaler {
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 1920px;
+	height: 1080px;
+	transform-origin: 0 0;
+}
+
+.kb-stage {
+	display: flex;
+	flex-direction: column;
+	width: 100%;
+	height: 100%;
+	background: var(--kb-board);
+	color: #fff;
+}
+
+/* ---- Main area -------------------------------------------------------- */
+
+.kb-main {
+	position: relative;
+	display: flex;
+	flex: 1 1 auto;
+	min-height: 0;
+}
+
+.kb-hero {
+	flex: 0 0 600px;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	padding: 40px;
+	background: var(--kb-accent);
+	border-inline-end: 16px solid #fff;
+	text-align: center;
+}
+
+.kb-title {
+	font-size: 150px;
+	font-weight: 900;
+	line-height: 0.92;
+	letter-spacing: -2px;
+}
+
+.kb-subtitle {
+	margin-top: 40px;
+	padding: 4px 34px 10px;
+	background: #262626;
+	font-size: 84px;
+	font-weight: 800;
+	line-height: 1;
+}
+
+.kb-arrow {
+	position: absolute;
+	top: 46%;
+	right: 616px; /* hero width + its border */
+	width: 0;
+	height: 0;
+	border-top: 48px solid transparent;
+	border-bottom: 48px solid transparent;
+	border-right: 64px solid var(--kb-arrow);
+	transform: translate(32px, -50%);
+	z-index: 2;
+}
+
+.kb-panel {
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	min-width: 0;
+	padding: 18px 44px 30px 30px;
+}
+
+.kb-day {
+	display: flex;
+	align-items: baseline;
+	justify-content: center;
+	gap: 24px;
+	margin: 0 0 10px;
+	padding: 0;
+	color: #fff;
+	font-family: inherit;
+	font-size: 60px;
+	font-weight: 800;
+	line-height: 1.1;
+}
+
+.kb-date {
+	font-size: 36px;
+	font-weight: 500;
+	opacity: 0.75;
+}
+
+/* ---- Table ------------------------------------------------------------ */
+
+.kb-table-wrap {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow: hidden;
+}
+
+.kb-board .kb-table {
+	width: 100%;
+	height: 100%;
+	margin: 0;
+	border-collapse: collapse;
+	table-layout: fixed;
+	background: transparent;
+	color: #fff;
+	font-size: inherit;
+}
+
+.kb-board .kb-table th,
+.kb-board .kb-table td {
+	padding: 6px 12px;
+	border: 3px solid var(--kb-line);
+	background: transparent;
+	color: #fff;
+	text-align: center;
+	vertical-align: middle;
+	overflow: hidden;
+	overflow-wrap: anywhere;
+}
+
+.kb-board .kb-table thead th {
+	height: 64px;
+	padding-bottom: 8px;
+	border-top: 0;
+	border-inline: 0;
+	font-size: 36px;
+	font-weight: 800;
+	vertical-align: bottom;
+}
+
+.kb-col-room { width: 19%; }
+.kb-col-course { width: 23%; }
+.kb-col-time { width: 17.5%; }
+
+.kb-board .kb-table .kb-room {
+	font-size: 32px;
+	font-weight: 700;
+}
+
+.kb-room-name,
+.kb-room-sub {
+	display: block;
+}
+
+.kb-room-sub {
+	margin-top: 4px;
+	font-size: 26px;
+	font-weight: 500;
+	opacity: 0.85;
+}
+
+.kb-course .kb-item {
+	font-size: 32px;
+	font-weight: 700;
+}
+
+.kb-time .kb-item {
+	font-size: 32px;
+	font-weight: 500;
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+.kb-multi .kb-item {
+	font-size: 25px;
+}
+
+.kb-multi .kb-item + .kb-item {
+	margin-top: 6px;
+	padding-top: 6px;
+	border-top: 1px dashed rgba(255, 255, 255, 0.4);
+}
+
+.kb-board .kb-table tbody tr.kb-hidden {
+	display: none;
+}
+
+.kb-pages {
+	display: flex;
+	justify-content: center;
+	gap: 14px;
+	height: 0;
+}
+
+.kb-pages.kb-has-pages {
+	height: 30px;
+	margin-top: 14px;
+}
+
+.kb-pages span {
+	width: 16px;
+	height: 16px;
+	border-radius: 50%;
+	background: rgba(255, 255, 255, 0.35);
+}
+
+.kb-pages span.kb-active {
+	background: var(--kb-arrow);
+}
+
+/* ---- Footer ----------------------------------------------------------- */
+
+.kb-footer {
+	display: flex;
+	flex: 0 0 170px;
+	align-items: center;
+	justify-content: space-between;
+	gap: 40px;
+	padding: 18px 70px;
+	background: #fff;
+}
+
+.kb-footer img {
+	display: block;
+	max-height: 130px;
+	width: auto;
+	height: auto;
+	object-fit: contain;
+}
+
+.kb-footer .kb-partners {
+	max-width: 70%;
+}
+
+.kb-footer .kb-logo {
+	max-width: 30%;
+}
+
+/* ---- Full-screen page ------------------------------------------------- */
+
+.kb-screen-body {
+	margin: 0;
+	overflow: hidden;
+	background: #000;
+}
+
+.kb-mode-screen {
+	position: fixed;
+	inset: 0;
+	width: 100vw;
+	height: 100vh;
+}
+
+.kb-mode-screen.kb-idle,
+.kb-mode-screen.kb-idle * {
+	cursor: none;
+}
+
+/* ---- Embedded on narrow screens (phones) ------------------------------ */
+
+.kb-board.kb-compact {
+	height: auto !important;
+}
+
+.kb-compact .kb-scaler {
+	position: static;
+	width: auto;
+	height: auto;
+	transform: none !important;
+}
+
+.kb-compact .kb-main {
+	flex-direction: column;
+}
+
+.kb-compact .kb-hero {
+	flex: none;
+	padding: 18px;
+	border-inline-end: 0;
+	border-bottom: 6px solid #fff;
+}
+
+.kb-compact .kb-title {
+	font-size: 40px;
+	letter-spacing: 0;
+}
+
+.kb-compact .kb-subtitle {
+	margin-top: 12px;
+	padding: 2px 14px 5px;
+	font-size: 26px;
+}
+
+.kb-compact .kb-arrow {
+	display: none;
+}
+
+.kb-compact .kb-panel {
+	padding: 12px;
+}
+
+.kb-compact .kb-day {
+	gap: 10px;
+	font-size: 28px;
+}
+
+.kb-compact .kb-date {
+	font-size: 18px;
+}
+
+.kb-compact .kb-table-wrap {
+	overflow-x: auto;
+}
+
+.kb-compact .kb-table {
+	min-width: 560px;
+}
+
+.kb-board.kb-compact .kb-table th,
+.kb-board.kb-compact .kb-table td {
+	padding: 6px;
+	border-width: 2px;
+}
+
+.kb-board.kb-compact .kb-table thead th {
+	height: auto;
+	font-size: 16px;
+}
+
+.kb-board.kb-compact .kb-table .kb-room,
+.kb-compact .kb-course .kb-item,
+.kb-compact .kb-time .kb-item {
+	font-size: 15px;
+}
+
+.kb-compact .kb-room-sub,
+.kb-compact .kb-multi .kb-item {
+	font-size: 13px;
+}
+
+.kb-compact .kb-pages {
+	display: none;
+}
+
+.kb-compact .kb-footer {
+	flex: none;
+	padding: 10px 14px;
+	gap: 14px;
+}
+
+.kb-compact .kb-footer img {
+	max-height: 50px;
+}
