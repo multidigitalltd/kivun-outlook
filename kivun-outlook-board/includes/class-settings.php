@@ -29,28 +29,25 @@ class Kivun_Board_Settings {
 			'hide_private'        => 1,
 
 			// Rooms (table rows). One per line: name | sub label | keywords.
-			'rooms'               => "יועץ משה\nמחשבים\nהר חוצבים | קומה 0\nגבעת רם | קומה 0\nכחלונות | קומה 0",
+			'rooms'               => "ימין משה\nמחשבים\nהר חוצבים | קומה 0\nגבעת רם | קומה 0\nנחלאות | קומה 0",
 			'match_title'         => 1,
 
 			// Board layout.
 			'split_time'          => '14:00',
-			'title'               => "מה\nהכיוון\nהיום?",
-			'subtitle'            => 'לו"ז יומי',
-			'col_room'            => 'כיתה',
-			'col_course'          => 'קורס/סדנא',
+			'title'               => 'מה הכיוון היום?',
+			'subtitle'            => 'לו״ז יומי',
 			'col_morning'         => 'בוקר',
-			'col_afternoon'       => 'אחה"צ',
+			'col_afternoon'       => 'אחר הצהריים',
 			'show_date'           => 1,
-			'logo_url'            => '',
-			'footer_image_url'    => '',
-			'accent_color'        => '#e8334a',
-			'board_color'         => '#3b3b3b',
-			'arrow_color'         => '#29b6e8',
+			'logo_url'            => '', // Empty: the bundled Kivun logo.
+			'accent_color'        => '#df2950', // Red: title, clock, live classes.
+			'board_color'         => '#2e2e31', // Charcoal: title text and lower half.
+			'arrow_color'         => '#5cc8f0', // Sky blue: lines and status dots.
 
 			// Screen.
 			'screen_slug'         => 'kivun-board',
 			'refresh_seconds'     => 60,
-			'rows_per_page'       => 8,
+			'rows_per_page'       => 5,
 			'page_seconds'        => 15,
 		);
 	}
@@ -64,6 +61,19 @@ class Kivun_Board_Settings {
 		$saved = get_option( self::OPTION, array() );
 		if ( ! is_array( $saved ) ) {
 			$saved = array();
+		}
+		// Values saved with the 1.x defaults follow the new 2.0 design.
+		$legacy = array(
+			'accent_color'  => '#e8334a',
+			'board_color'   => '#3b3b3b',
+			'arrow_color'   => '#29b6e8',
+			'col_afternoon' => 'אחה"צ',
+			'subtitle'      => 'לו"ז יומי',
+		);
+		foreach ( $legacy as $key => $old ) {
+			if ( isset( $saved[ $key ] ) && $saved[ $key ] === $old ) {
+				unset( $saved[ $key ] );
+			}
 		}
 		return array_merge( self::defaults(), $saved );
 	}

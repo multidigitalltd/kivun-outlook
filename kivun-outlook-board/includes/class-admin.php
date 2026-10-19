@@ -68,14 +68,12 @@ class Kivun_Board_Admin {
 		$out['match_title'] = empty( $in['match_title'] ) ? 0 : 1;
 
 		$out['split_time'] = isset( $in['split_time'] ) && preg_match( '/^([01]?\d|2[0-3]):[0-5]\d$/', trim( $in['split_time'] ) ) ? trim( $in['split_time'] ) : $d['split_time'];
-		$out['title']      = isset( $in['title'] ) ? sanitize_textarea_field( $in['title'] ) : $old['title'];
-		foreach ( array( 'subtitle', 'col_room', 'col_course', 'col_morning', 'col_afternoon' ) as $key ) {
+		$out['title']      = isset( $in['title'] ) ? sanitize_text_field( $in['title'] ) : $old['title'];
+		foreach ( array( 'subtitle', 'col_morning', 'col_afternoon' ) as $key ) {
 			$out[ $key ] = isset( $in[ $key ] ) ? sanitize_text_field( $in[ $key ] ) : $old[ $key ];
 		}
 		$out['show_date'] = empty( $in['show_date'] ) ? 0 : 1;
-		foreach ( array( 'logo_url', 'footer_image_url' ) as $key ) {
-			$out[ $key ] = isset( $in[ $key ] ) ? esc_url_raw( trim( $in[ $key ] ) ) : $old[ $key ];
-		}
+		$out['logo_url']  = isset( $in['logo_url'] ) ? esc_url_raw( trim( $in['logo_url'] ) ) : $old['logo_url'];
 		foreach ( array( 'accent_color', 'board_color', 'arrow_color' ) as $key ) {
 			$color       = isset( $in[ $key ] ) ? sanitize_hex_color( $in[ $key ] ) : '';
 			$out[ $key ] = $color ? $color : $d[ $key ];
@@ -277,42 +275,39 @@ class Kivun_Board_Admin {
 				<h2 class="title">3. עיצוב הלוח</h2>
 				<table class="form-table" role="presentation">
 					<tr>
-						<th scope="row"><label for="kb-split">שעת מעבר בוקר ← אחה"צ</label></th>
+						<th scope="row"><label for="kb-split">שעת מעבר בוקר ← אחר הצהריים</label></th>
 						<td><input id="kb-split" type="time" name="<?php echo esc_attr( $name ); ?>[split_time]" value="<?php echo esc_attr( $s['split_time'] ); ?>">
-						<p class="description">אירוע שמתחיל לפני שעה זו יוצג בעמודות הבוקר, ואחריה – בעמודות אחה"צ.</p></td>
+						<p class="description">שיעור שמתחיל לפני שעה זו יוצג בחלק העליון של הכרטיס (בוקר), ואחריה – בחלק התחתון.</p></td>
 					</tr>
 					<tr>
-						<th scope="row"><label for="kb-title">כותרת (חלק אדום)</label></th>
-						<td><textarea id="kb-title" rows="3" class="regular-text" name="<?php echo esc_attr( $name ); ?>[title]"><?php echo esc_textarea( $s['title'] ); ?></textarea>
-						<p class="description">כל שורה תוצג בשורה נפרדת.</p></td>
+						<th scope="row"><label for="kb-title">כותרת</label></th>
+						<td><input id="kb-title" type="text" class="regular-text" name="<?php echo esc_attr( $name ); ?>[title]" value="<?php echo esc_attr( preg_replace( '/\s+/u', ' ', $s['title'] ) ); ?>">
+						<p class="description">המילה האחרונה מוצגת באדום.</p></td>
 					</tr>
 					<tr>
-						<th scope="row"><label for="kb-subtitle">תת-כותרת</label></th>
+						<th scope="row"><label for="kb-subtitle">שורת משנה</label></th>
 						<td><input id="kb-subtitle" type="text" class="regular-text" name="<?php echo esc_attr( $name ); ?>[subtitle]" value="<?php echo esc_attr( $s['subtitle'] ); ?>"></td>
 					</tr>
 					<tr>
-						<th scope="row">כותרות עמודות</th>
+						<th scope="row">שמות חלקי היום</th>
 						<td>
-							<input type="text" class="small-text" style="width:8em" name="<?php echo esc_attr( $name ); ?>[col_room]" value="<?php echo esc_attr( $s['col_room'] ); ?>" aria-label="כיתה">
-							<input type="text" class="small-text" style="width:8em" name="<?php echo esc_attr( $name ); ?>[col_course]" value="<?php echo esc_attr( $s['col_course'] ); ?>" aria-label="קורס">
-							<input type="text" class="small-text" style="width:8em" name="<?php echo esc_attr( $name ); ?>[col_morning]" value="<?php echo esc_attr( $s['col_morning'] ); ?>" aria-label="בוקר">
-							<input type="text" class="small-text" style="width:8em" name="<?php echo esc_attr( $name ); ?>[col_afternoon]" value="<?php echo esc_attr( $s['col_afternoon'] ); ?>" aria-label="אחה״צ">
+							<input type="text" class="small-text" style="width:10em" name="<?php echo esc_attr( $name ); ?>[col_morning]" value="<?php echo esc_attr( $s['col_morning'] ); ?>" aria-label="בוקר">
+							<input type="text" class="small-text" style="width:10em" name="<?php echo esc_attr( $name ); ?>[col_afternoon]" value="<?php echo esc_attr( $s['col_afternoon'] ); ?>" aria-label="אחר הצהריים">
 						</td>
 					</tr>
 					<tr>
 						<th scope="row">תאריך</th>
-						<td><label><input type="checkbox" name="<?php echo esc_attr( $name ); ?>[show_date]" value="1" <?php checked( 1, (int) $s['show_date'] ); ?>> להציג את התאריך ליד שם היום</label></td>
+						<td><label><input type="checkbox" name="<?php echo esc_attr( $name ); ?>[show_date]" value="1" <?php checked( 1, (int) $s['show_date'] ); ?>> להציג את התאריך הלועזי והעברי ליד שם היום</label></td>
 					</tr>
 					<?php
-					self::image_row( 'logo_url', 'לוגו (פס תחתון, ימין)', $s );
-					self::image_row( 'footer_image_url', 'תמונת שותפים/לוגואים (פס תחתון, שמאל)', $s );
+					self::image_row( 'logo_url', 'לוגו (ריק = לוגו כיוון המובנה)', $s );
 					?>
 					<tr>
 						<th scope="row">צבעים</th>
 						<td>
-							<label>רקע אדום <input type="color" name="<?php echo esc_attr( $name ); ?>[accent_color]" value="<?php echo esc_attr( $s['accent_color'] ); ?>"></label>
-							&nbsp; <label>רקע הטבלה <input type="color" name="<?php echo esc_attr( $name ); ?>[board_color]" value="<?php echo esc_attr( $s['board_color'] ); ?>"></label>
-							&nbsp; <label>חץ <input type="color" name="<?php echo esc_attr( $name ); ?>[arrow_color]" value="<?php echo esc_attr( $s['arrow_color'] ); ?>"></label>
+							<label>אדום (כותרת, שעון, שיעור פעיל) <input type="color" name="<?php echo esc_attr( $name ); ?>[accent_color]" value="<?php echo esc_attr( $s['accent_color'] ); ?>"></label>
+							&nbsp; <label>כהה (טקסט וחצי תחתון) <input type="color" name="<?php echo esc_attr( $name ); ?>[board_color]" value="<?php echo esc_attr( $s['board_color'] ); ?>"></label>
+							&nbsp; <label>תכלת (קווים ונקודות) <input type="color" name="<?php echo esc_attr( $name ); ?>[arrow_color]" value="<?php echo esc_attr( $s['arrow_color'] ); ?>"></label>
 						</td>
 					</tr>
 				</table>

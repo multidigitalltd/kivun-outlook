@@ -1,5 +1,5 @@
 /**
- * Kivun Outlook Board – scaling, live refresh and row paging.
+ * Kivun Outlook Board – scaling, clock, live class statuses, refresh and paging.
  * Written in ES5 so it also runs on older smart-TV / signage browsers.
  */
 (function () {
@@ -18,6 +18,7 @@
 		this.perPage = parseInt(el.getAttribute('data-rows-per-page'), 10) || 0;
 		this.pageSeconds = parseInt(el.getAttribute('data-page-seconds'), 10) || 15;
 		this.hash = el.getAttribute('data-hash');
+		this.tz = el.getAttribute('data-tz');
 		this.scaler = el.querySelector('.kb-scaler');
 		this.stage = el.querySelector('.kb-stage');
 		this.page = 0;
@@ -28,6 +29,8 @@
 		window.addEventListener('resize', function () { self.fit(); });
 		this.setupPages();
 
+		this.tick();
+		setInterval(function () { self.tick(); }, 10000);
 		if (this.endpoint) {
 			setInterval(function () { self.poll(); }, this.refresh * 1000);
 		}
@@ -71,13 +74,14 @@
 		this.scaler.style.transform = value;
 	};
 
-	/** Splits the rows into pages that rotate when there are more rooms than fit. */
+	/** Splits the room cards into pages that rotate when there are more rooms than fit. */
 	Board.prototype.setupPages = function () {
-		var rows = this.stage.querySelectorAll('.kb-table tbody tr');
+		var cards = this.stage.querySelectorAll('.kb-card');
+		var grid = this.stage.querySelector('.kb-grid');
 		var dots = this.stage.querySelector('.kb-pages');
 		var self = this;
 		var compact = hasClass(this.el, 'kb-compact');
-		var pages = (!compact && this.perPage > 0) ? Math.ceil(rows.length / this.perPage) : 1;
+		var pages = (!compact && this.perPage > 0) ? Math.ceil(cards.length / this.perPage) : 1;
 
 		if (this.pageTimer) {
 			clearInterval(this.pageTimer);
@@ -86,26 +90,28 @@
 		if (this.page >= pages) {
 			this.page = 0;
 		}
+		if (grid) {
+			// A shorter last page keeps the same card width.
+			grid.style.setProperty('--kb-cols', String(Math.max(1, pages > 1 ? this.perPage : cards.length)));
+		}
 
 		if (dots) {
 			dots.innerHTML = '';
-			toggleClass(dots, 'kb-has-pages', pages > 1);
 			for (var i = 0; pages > 1 && i < pages; i++) {
 				dots.appendChild(document.createElement('span'));
 			}
 		}
 
 		function show() {
-			for (var r = 0; r < rows.length; r++) {
-				var visible = pages <= 1 || Math.floor(r / self.perPage) === self.page;
-				toggleClass(rows[r], 'kb-hidden', !visible);
+			for (var c = 0; c < cards.length; c++) {
+				var visible = pages <= 1 || Math.floor(c / self.perPage) === self.page;
+				toggleClass(cards[c], 'kb-hidden', !visible);
 			}
 			if (dots) {
 				for (var d = 0; d < dots.children.length; d++) {
 					toggleClass(dots.children[d], 'kb-active', d === self.page);
 				}
 			}
-			self.equalizeRows(rows, compact, pages > 1 ? self.perPage : 0);
 		}
 
 		show();
@@ -117,25 +123,58 @@
 		}
 	};
 
-	/** Gives the visible rows equal heights that fill the panel (stage mode only). */
-	Board.prototype.equalizeRows = function (rows, compact, slots) {
-		var wrap = this.stage.querySelector('.kb-table-wrap');
-		var head = this.stage.querySelector('.kb-table thead');
-		var visible = [];
-		var r;
-		for (r = 0; r < rows.length; r++) {
-			rows[r].style.height = '';
-			if (!hasClass(rows[r], 'kb-hidden')) {
-				visible.push(rows[r]);
+	/** HH:MM in the site's time zone, so a TV with a wrong zone setting still shows Israel time. */
+	Board.prototype.clockText = function (now) {
+		if (this.tz && /^[A-Za-z_]+\/[A-Za-z_\/+-]+$/.test(this.tz) && window.Intl) {
+			try {
+				var text = new Intl.DateTimeFormat('en-GB', { timeZone: this.tz, hour: '2-digit', minute: '2-digit', hour12: false }).format(now);
+				if (/^\d{2}:\d{2}$/.test(text)) {
+					return text;
+				}
+			} catch (e) {
+				// Old browser without time zone support: fall back to the device clock.
 			}
 		}
-		if (compact || !wrap || !head || !visible.length) {
-			return;
+		return pad(now.getHours()) + ':' + pad(now.getMinutes());
+	};
+
+	/** Updates the clock and every slot's status (now / soon / ended) from the current time. */
+	Board.prototype.tick = function () {
+		var now = new Date();
+		var nowSec = Math.floor(now.getTime() / 1000);
+		var clock = this.stage.querySelector('.kb-clock-time');
+		if (clock) {
+			clock.textContent = this.clockText(now);
 		}
-		// With paging, size for a full page so a shorter last page keeps the same row height.
-		var height = Math.floor((wrap.clientHeight - head.offsetHeight) / (slots || visible.length));
-		for (r = 0; r < visible.length; r++) {
-			visible[r].style.height = height + 'px';
+
+		var heb = this.stage.querySelector('.kb-hebdate');
+		if (heb && !heb.textContent && window.Intl) {
+			try {
+				var parts = (heb.getAttribute('data-date') || '').split('-');
+				var day = new Date(+parts[0], +parts[1] - 1, +parts[2], 12);
+				heb.textContent = new Intl.DateTimeFormat('he-IL-u-ca-hebrew', { day: 'numeric', month: 'long', year: 'numeric' }).format(day);
+			} catch (e) {
+				// Browser without Hebrew calendar support: leave it out.
+			}
+		}
+
+		var slots = this.stage.querySelectorAll('.kb-slot');
+		for (var i = 0; i < slots.length; i++) {
+			var events = slots[i].querySelectorAll('.kb-event');
+			var state = slotState(events, nowSec);
+			var states = ['empty', 'live', 'soon', 'upcoming', 'ended'];
+			for (var k = 0; k < states.length; k++) {
+				toggleClass(slots[i], 'kb-slot--' + states[k], states[k] === state);
+			}
+			var badge = slots[i].querySelector('.kb-badge');
+			if (badge) {
+				badge.textContent = BADGES[state] || '';
+			}
+			for (var e = 0; e < events.length; e++) {
+				var end = +events[e].getAttribute('data-end');
+				var start = +events[e].getAttribute('data-start');
+				toggleClass(events[e], 'kb-event--ended', end > start && nowSec >= end);
+			}
 		}
 	};
 
@@ -156,6 +195,7 @@
 					self.hash = data.hash;
 					self.stage.innerHTML = data.html;
 					self.setupPages();
+					self.tick();
 				}
 			} catch (e) {
 				// Ignore malformed responses.
@@ -199,6 +239,35 @@
 			xhr.send();
 		}, RELOAD_AFTER_MS);
 	};
+
+	var SOON_SECONDS = 60 * 60;
+	var BADGES = { live: 'עכשיו', soon: 'בקרוב', ended: 'הסתיים' };
+
+	/** Mirrors Kivun_Board::slot_state() in PHP. */
+	function slotState(events, now) {
+		if (!events.length) {
+			return 'empty';
+		}
+		var next = null;
+		for (var i = 0; i < events.length; i++) {
+			var start = +events[i].getAttribute('data-start');
+			var end = +events[i].getAttribute('data-end');
+			if (now >= start && now < end) {
+				return 'live';
+			}
+			if (now < start && (next === null || start < next)) {
+				next = start;
+			}
+		}
+		if (next === null) {
+			return 'ended';
+		}
+		return next - now <= SOON_SECONDS ? 'soon' : 'upcoming';
+	}
+
+	function pad(n) {
+		return (n < 10 ? '0' : '') + n;
+	}
 
 	function hasClass(el, name) {
 		return (' ' + el.className + ' ').indexOf(' ' + name + ' ') !== -1;
