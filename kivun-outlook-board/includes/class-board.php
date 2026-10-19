@@ -123,6 +123,7 @@ class Kivun_Board {
 			array(
 				'date' => $date->format( 'Y-m-d' ),
 				'hash' => self::hash( $model ),
+				'now'  => self::now_ms(),
 				'html' => self::render_inner( $model ),
 			)
 		);
@@ -322,7 +323,7 @@ class Kivun_Board {
 		}
 
 		return sprintf(
-			'<div class="kb-board kb-mode-%1$s" dir="rtl" lang="he" style="%2$s" data-mode="%1$s" data-endpoint="%3$s" data-refresh="%4$d" data-rows-per-page="%5$d" data-page-seconds="%6$d" data-hash="%7$s" data-tz="%9$s"><div class="kb-scaler"><div class="kb-stage">%8$s</div></div></div>',
+			'<div class="kb-board kb-mode-%1$s" dir="rtl" lang="he" style="%2$s" data-mode="%1$s" data-endpoint="%3$s" data-refresh="%4$d" data-rows-per-page="%5$d" data-page-seconds="%6$d" data-hash="%7$s" data-tz="%9$s" data-now="%10$s"><div class="kb-scaler"><div class="kb-stage">%8$s</div></div></div>',
 			esc_attr( $mode ),
 			$style,
 			esc_url( $endpoint ),
@@ -331,8 +332,19 @@ class Kivun_Board {
 			max( 5, (int) $s['page_seconds'] ),
 			esc_attr( self::hash( $model ) ),
 			self::render_inner( $model ),
-			esc_attr( wp_timezone_string() )
+			esc_attr( wp_timezone_string() ),
+			esc_attr( self::now_ms() )
 		);
+	}
+
+	/**
+	 * Server time in milliseconds. The screen corrects its own clock with it,
+	 * so the time shown is right even when the TV's clock is off.
+	 *
+	 * @return string
+	 */
+	private static function now_ms() {
+		return (string) (int) round( microtime( true ) * 1000 );
 	}
 
 	/**
@@ -395,7 +407,7 @@ class Kivun_Board {
 			<div class="kb-brand">
 				<div class="kb-clock">
 					<span class="kb-clock-icon"><svg width="35" height="35" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2.6"></circle><path d="M12 7 V12 L15.5 14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>
-					<span class="kb-clock-time"><?php echo esc_html( wp_date( 'H:i', $now ) ); ?></span>
+					<span class="kb-clock-time"><span class="kb-clock-hm"><?php echo esc_html( wp_date( 'H:i', $now ) ); ?></span><span class="kb-clock-sec"><?php echo esc_html( wp_date( ':s', $now ) ); ?></span></span>
 				</div>
 				<img class="kb-logo" src="<?php echo esc_url( $logo ); ?>" alt="כיוון">
 			</div>
@@ -485,7 +497,8 @@ class Kivun_Board {
 	}
 
 	/**
-	 * Hebrew calendar date ("8 בחשוון 5787"); board.js fills it in when PHP lacks the intl extension.
+	 * Hebrew calendar date in Hebrew letters ("ח׳ בחשוון תשפ״ז").
+	 * board.js does the same in the browser when PHP lacks the intl extension.
 	 *
 	 * @param string $ymd Date as Y-m-d.
 	 * @return string
@@ -494,9 +507,73 @@ class Kivun_Board {
 		if ( ! class_exists( 'IntlDateFormatter' ) ) {
 			return '';
 		}
-		$formatter = new IntlDateFormatter( 'he_IL@calendar=hebrew', IntlDateFormatter::NONE, IntlDateFormatter::NONE, 'UTC', IntlDateFormatter::TRADITIONAL, 'd בMMMM y' );
-		$value     = $formatter->format( new DateTime( $ymd . ' 12:00:00', new DateTimeZone( 'UTC' ) ) );
-		return false === $value ? '' : $value;
+		$date  = new DateTime( $ymd . ' 12:00:00', new DateTimeZone( 'UTC' ) );
+		$parts = array();
+		foreach ( array( 'd', 'MMMM', 'y' ) as $pattern ) {
+			// numbers=latn: always get plain digits, whatever the ICU defaults are.
+			$formatter = new IntlDateFormatter( 'he_IL@calendar=hebrew;numbers=latn', IntlDateFormatter::NONE, IntlDateFormatter::NONE, 'UTC', IntlDateFormatter::TRADITIONAL, $pattern );
+			$value     = $formatter->format( $date );
+			if ( false === $value || '' === $value ) {
+				return '';
+			}
+			$parts[] = $value;
+		}
+		return self::gematria( (int) $parts[0] ) . ' ב' . $parts[1] . ' ' . self::gematria( (int) $parts[2] % 1000 );
+	}
+
+	/**
+	 * A number in Hebrew letters with geresh / gershayim: 8 → ח׳, 15 → ט״ו, 787 → תשפ״ז.
+	 *
+	 * @param int $n Number (1–999).
+	 * @return string
+	 */
+	public static function gematria( $n ) {
+		$letters = array(
+			400 => 'ת',
+			300 => 'ש',
+			200 => 'ר',
+			100 => 'ק',
+			90  => 'צ',
+			80  => 'פ',
+			70  => 'ע',
+			60  => 'ס',
+			50  => 'נ',
+			40  => 'מ',
+			30  => 'ל',
+			20  => 'כ',
+			10  => 'י',
+			9   => 'ט',
+			8   => 'ח',
+			7   => 'ז',
+			6   => 'ו',
+			5   => 'ה',
+			4   => 'ד',
+			3   => 'ג',
+			2   => 'ב',
+			1   => 'א',
+		);
+		$out = '';
+		$n   = (int) $n;
+		while ( $n > 0 ) {
+			// 15 and 16 are written ט״ו / ט״ז, never as the letters of the divine name.
+			if ( 15 === $n || 16 === $n ) {
+				$out .= 'ט' . ( 15 === $n ? 'ו' : 'ז' );
+				break;
+			}
+			foreach ( $letters as $value => $letter ) {
+				if ( $n >= $value ) {
+					$out .= $letter;
+					$n   -= $value;
+					break;
+				}
+			}
+		}
+		$chars = preg_split( '//u', $out, -1, PREG_SPLIT_NO_EMPTY );
+		if ( count( $chars ) < 2 ) {
+			return $out . '׳';
+		}
+		$last = array_pop( $chars );
+		return implode( '', $chars ) . '״' . $last;
 	}
 
 	/**

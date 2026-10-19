@@ -120,6 +120,14 @@
 	font-variant-numeric: tabular-nums;
 }
 
+.kb-clock-sec {
+	display: inline-block;
+	min-width: 1.6em; /* Stops the pill from twitching as digits change. */
+	font-size: 40px;
+	font-weight: 700;
+	opacity: 0.8;
+}
+
 .kb-board .kb-logo {
 	display: block;
 	width: auto;
@@ -432,6 +440,10 @@
 
 .kb-compact .kb-clock-time {
 	font-size: 32px;
+}
+
+.kb-compact .kb-clock-sec {
+	font-size: 20px;
 }
 
 .kb-board.kb-compact .kb-logo {

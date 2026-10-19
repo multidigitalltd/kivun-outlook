@@ -19,6 +19,9 @@
 		this.pageSeconds = parseInt(el.getAttribute('data-page-seconds'), 10) || 15;
 		this.hash = el.getAttribute('data-hash');
 		this.tz = el.getAttribute('data-tz');
+		// Difference between the server clock and this device's clock, in ms.
+		var serverNow = +el.getAttribute('data-now');
+		this.skew = serverNow > 0 ? serverNow - Date.now() : 0;
 		this.scaler = el.querySelector('.kb-scaler');
 		this.stage = el.querySelector('.kb-stage');
 		this.page = 0;
@@ -30,6 +33,7 @@
 		this.setupPages();
 
 		this.tick();
+		this.runClock();
 		setInterval(function () { self.tick(); }, 10000);
 		if (this.endpoint) {
 			setInterval(function () { self.poll(); }, this.refresh * 1000);
@@ -127,32 +131,59 @@
 	Board.prototype.clockText = function (now) {
 		if (this.tz && /^[A-Za-z_]+\/[A-Za-z_\/+-]+$/.test(this.tz) && window.Intl) {
 			try {
-				var text = new Intl.DateTimeFormat('en-GB', { timeZone: this.tz, hour: '2-digit', minute: '2-digit', hour12: false }).format(now);
-				if (/^\d{2}:\d{2}$/.test(text)) {
+				var text = new Intl.DateTimeFormat('en-GB', { timeZone: this.tz, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(now);
+				if (/^\d{2}:\d{2}:\d{2}$/.test(text)) {
 					return text;
 				}
 			} catch (e) {
 				// Old browser without time zone support: fall back to the device clock.
 			}
 		}
-		return pad(now.getHours()) + ':' + pad(now.getMinutes());
+		return pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds());
+	};
+
+	/** Current time according to the server (device clock + measured difference). */
+	Board.prototype.now = function () {
+		return new Date(Date.now() + this.skew);
+	};
+
+	/** Updates the clock display (HH:MM and running seconds). */
+	Board.prototype.drawClock = function () {
+		var text = this.clockText(this.now());
+		var hm = this.stage.querySelector('.kb-clock-hm');
+		var sec = this.stage.querySelector('.kb-clock-sec');
+		if (hm && sec) {
+			hm.textContent = text.slice(0, 5);
+			sec.textContent = text.slice(5);
+		}
+	};
+
+	/** Redraws the clock exactly on each new second. */
+	Board.prototype.runClock = function () {
+		var self = this;
+		this.drawClock();
+		var wait = 1000 - (Date.now() + this.skew) % 1000;
+		setTimeout(function () { self.runClock(); }, wait + 15);
 	};
 
 	/** Updates the clock and every slot's status (now / soon / ended) from the current time. */
 	Board.prototype.tick = function () {
-		var now = new Date();
-		var nowSec = Math.floor(now.getTime() / 1000);
-		var clock = this.stage.querySelector('.kb-clock-time');
-		if (clock) {
-			clock.textContent = this.clockText(now);
-		}
+		var nowSec = Math.floor(this.now().getTime() / 1000);
+		this.drawClock();
 
 		var heb = this.stage.querySelector('.kb-hebdate');
 		if (heb && !heb.textContent && window.Intl) {
 			try {
 				var parts = (heb.getAttribute('data-date') || '').split('-');
 				var day = new Date(+parts[0], +parts[1] - 1, +parts[2], 12);
-				heb.textContent = new Intl.DateTimeFormat('he-IL-u-ca-hebrew', { day: 'numeric', month: 'long', year: 'numeric' }).format(day);
+				var fields = {};
+				var list = new Intl.DateTimeFormat('he-IL-u-ca-hebrew-nu-latn', { day: 'numeric', month: 'long', year: 'numeric' }).formatToParts(day);
+				for (var f = 0; f < list.length; f++) {
+					fields[list[f].type] = list[f].value;
+				}
+				if (fields.day && fields.month && fields.year) {
+					heb.textContent = gematria(+fields.day) + ' ב' + fields.month + ' ' + gematria(+fields.year % 1000);
+				}
 			} catch (e) {
 				// Browser without Hebrew calendar support: leave it out.
 			}
@@ -182,6 +213,7 @@
 	Board.prototype.poll = function () {
 		var self = this;
 		var url = this.endpoint + (this.endpoint.indexOf('?') === -1 ? '?' : '&') + '_=' + Date.now();
+		var sent = Date.now();
 		var xhr = new XMLHttpRequest();
 		xhr.open('GET', url, true);
 		xhr.setRequestHeader('Accept', 'application/json');
@@ -191,6 +223,11 @@
 			}
 			try {
 				var data = JSON.parse(xhr.responseText);
+				if (data && data.now) {
+					// The server stamped its time halfway through the round trip.
+					var received = Date.now();
+					self.skew = +data.now - (sent + received) / 2;
+				}
 				if (data && data.html && data.hash !== self.hash) {
 					self.hash = data.hash;
 					self.stage.innerHTML = data.html;
@@ -263,6 +300,27 @@
 			return 'ended';
 		}
 		return next - now <= SOON_SECONDS ? 'soon' : 'upcoming';
+	}
+
+	/** Mirrors Kivun_Board::gematria() in PHP: 8 → ח׳, 15 → ט״ו, 787 → תשפ״ז. */
+	function gematria(n) {
+		var values = [400, 300, 200, 100, 90, 80, 70, 60, 50, 40, 30, 20, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
+		var letters = 'תשרקצפעסנמלכיטחזוהדגבא';
+		var out = '';
+		while (n > 0) {
+			if (n === 15 || n === 16) {
+				out += n === 15 ? 'טו' : 'טז';
+				break;
+			}
+			for (var i = 0; i < values.length; i++) {
+				if (n >= values[i]) {
+					out += letters.charAt(i);
+					n -= values[i];
+					break;
+				}
+			}
+		}
+		return out.length < 2 ? out + '׳' : out.slice(0, -1) + '״' + out.slice(-1);
 	}
 
 	function pad(n) {
