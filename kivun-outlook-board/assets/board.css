@@ -131,10 +131,9 @@
 .kb-board .kb-logo {
 	display: block;
 	width: auto;
-	max-width: 420px;
+	max-width: 460px;
 	height: 120px;
 	object-fit: contain;
-	mix-blend-mode: multiply; /* The bundled PNG has a white background. */
 }
 
 /* ---- Room cards ------------------------------------------------------- */

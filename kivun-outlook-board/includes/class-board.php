@@ -386,7 +386,7 @@ class Kivun_Board {
 			$subline[] = '<span class="kb-hebdate" data-date="' . esc_attr( $model['date'] ) . '">' . esc_html( self::hebrew_date( $model['date'] ) ) . '</span>';
 		}
 
-		$logo = $s['logo_url'] ? $s['logo_url'] : KIVUN_BOARD_URL . 'assets/kivun-logo.png';
+		$logo = $s['logo_url'] ? $s['logo_url'] : KIVUN_BOARD_URL . 'assets/kivun-logo.png?ver=' . KIVUN_BOARD_VERSION;
 		$cols = count( $model['rows'] );
 		if ( (int) $s['rows_per_page'] > 0 ) {
 			$cols = min( $cols, (int) $s['rows_per_page'] );
