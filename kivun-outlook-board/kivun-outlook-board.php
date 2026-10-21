@@ -2,10 +2,10 @@
 /**
  * Plugin Name:       Kivun Outlook Board – לוח כיתות מאאוטלוק
  * Description:       מסנכרן יומן Outlook (קישור ICS מפורסם או Microsoft Graph) ללוח כיתות יומי מעוצב בדף פומבי, כולל מצב תצוגה מלאה להקרנה על מסך בכניסה.
- * Version:           2.2.0
+ * Version:           2.3.0
  * Requires at least: 5.8
  * Requires PHP:      7.4
- * Author:            Kivun
+ * Author:            multidigital
  * License:           GPL-2.0-or-later
  * Text Domain:       kivun-board
  */
@@ -14,7 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'KIVUN_BOARD_VERSION', '2.2.0' );
+define( 'KIVUN_BOARD_VERSION', '2.3.0' );
 define( 'KIVUN_BOARD_FILE', __FILE__ );
 define( 'KIVUN_BOARD_DIR', plugin_dir_path( __FILE__ ) );
 define( 'KIVUN_BOARD_URL', plugin_dir_url( __FILE__ ) );

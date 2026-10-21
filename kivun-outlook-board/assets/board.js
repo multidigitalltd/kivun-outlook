@@ -261,22 +261,15 @@
 		}, RELOAD_AFTER_MS);
 	};
 
-	/** [kivun_week]: refreshes the table, marks the class running now / the ones that ended, and lets visitors pick the dates. */
+	/** [kivun_week]: refreshes the table (also moves to the next week on Thursday) and marks the class running now / the ones that ended. */
 	function Week(el) {
 		this.el = el;
 		this.endpoint = el.getAttribute('data-endpoint');
-		this.defaultEndpoint = this.endpoint;
-		this.api = el.getAttribute('data-api');
-		this.saturday = el.getAttribute('data-saturday') === '1';
-		this.maxDays = parseInt(el.getAttribute('data-max-days'), 10) || 31;
 		this.refresh = parseInt(el.getAttribute('data-refresh'), 10) || 60;
 		this.hash = el.getAttribute('data-hash');
 		var serverNow = +el.getAttribute('data-now');
 		this.skew = serverNow > 0 ? serverNow - Date.now() : 0;
 		this.body = el.querySelector('.kb-week-body');
-		this.from = el.querySelector('.kb-week-from');
-		this.to = el.querySelector('.kb-week-to');
-		this.seq = 0;
 
 		var self = this;
 		this.tick();
@@ -284,62 +277,7 @@
 		if (this.endpoint && this.body) {
 			setInterval(function () { self.poll(); }, this.refresh * 1000);
 		}
-		if (this.from && this.to && this.api) {
-			this.setupControls();
-		}
 	}
-
-	Week.prototype.setupControls = function () {
-		var self = this;
-		this.from.addEventListener('change', function () { self.pick('from'); });
-		this.to.addEventListener('change', function () { self.pick('to'); });
-
-		var steps = this.el.querySelectorAll('.kb-week-step');
-		for (var i = 0; i < steps.length; i++) {
-			steps[i].addEventListener('click', function () {
-				// Moves the whole range back or forward by its own length.
-				var from = parseYmd(self.from.value);
-				var to = parseYmd(self.to.value);
-				if (from === null || to === null) {
-					return;
-				}
-				var shift = (Math.round((to - from) / DAY_MS) + 1) * +this.getAttribute('data-step');
-				self.load(formatYmd(from + shift * DAY_MS), formatYmd(to + shift * DAY_MS));
-			});
-		}
-
-		var reset = this.el.querySelector('.kb-week-reset');
-		if (reset) {
-			reset.addEventListener('click', function () {
-				self.endpoint = self.defaultEndpoint;
-				self.poll();
-			});
-		}
-	};
-
-	/** A date field changed: keep the range valid (from ≤ to, at most maxDays) and load it. */
-	Week.prototype.pick = function (changed) {
-		var from = parseYmd(this.from.value);
-		var to = parseYmd(this.to.value);
-		if (from === null || to === null) {
-			return; // Half-typed date.
-		}
-		var span = this.maxDays - 1;
-		if (changed === 'from' && (to < from || to - from > span * DAY_MS)) {
-			to = from + Math.min(span, 6) * DAY_MS;
-		} else if (changed === 'to' && (to < from || to - from > span * DAY_MS)) {
-			from = to - Math.min(span, 6) * DAY_MS;
-		}
-		this.load(formatYmd(from), formatYmd(to));
-	};
-
-	Week.prototype.load = function (from, to) {
-		var days = Math.round((parseYmd(to) - parseYmd(from)) / DAY_MS) + 1;
-		this.from.value = from;
-		this.to.value = to;
-		this.endpoint = this.api + (this.api.indexOf('?') === -1 ? '?' : '&') + 'start=' + from + '&days=' + days + (this.saturday ? '&saturday=1' : '');
-		this.poll();
-	};
 
 	Week.prototype.tick = function () {
 		var nowSec = Math.floor((Date.now() + this.skew) / 1000);
@@ -354,33 +292,22 @@
 		}
 	};
 
-	/** Same as Board.prototype.poll(), for the week table (also moves on a day at midnight). */
+	/** Same as Board.prototype.poll(), for the week table. */
 	Week.prototype.poll = function () {
 		var self = this;
 		var url = this.endpoint + (this.endpoint.indexOf('?') === -1 ? '?' : '&') + '_=' + Date.now();
 		var sent = Date.now();
-		var seq = ++this.seq;
 		var xhr = new XMLHttpRequest();
-		addClass(this.el, 'kb-week--loading');
 		xhr.open('GET', url, true);
 		xhr.setRequestHeader('Accept', 'application/json');
 		xhr.onreadystatechange = function () {
-			if (xhr.readyState !== 4 || seq !== self.seq) {
-				return; // Only the newest request counts (the visitor may click quickly).
-			}
-			removeClass(self.el, 'kb-week--loading');
-			if (xhr.status !== 200) {
+			if (xhr.readyState !== 4 || xhr.status !== 200) {
 				return;
 			}
 			try {
 				var data = JSON.parse(xhr.responseText);
 				if (data && data.now) {
 					self.skew = +data.now - (sent + Date.now()) / 2;
-				}
-				if (data && data.from && data.to && self.from && self.to) {
-					// The server may have trimmed the range to the days it has.
-					self.from.value = data.from;
-					self.to.value = data.to;
 				}
 				if (data && data.html && data.hash !== self.hash) {
 					self.hash = data.hash;
@@ -393,19 +320,6 @@
 		};
 		xhr.send();
 	};
-
-	var DAY_MS = 24 * 60 * 60 * 1000;
-
-	/** "2026-10-21" → UTC midnight in ms (no DST surprises), or null. */
-	function parseYmd(value) {
-		var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value || '');
-		return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) : null;
-	}
-
-	function formatYmd(ms) {
-		var d = new Date(ms);
-		return d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1) + '-' + pad(d.getUTCDate());
-	}
 
 	/** Fills Hebrew dates the server left empty (PHP without intl). data-short leaves out the year. */
 	function fillHebrewDates(root) {
