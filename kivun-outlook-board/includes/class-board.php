@@ -22,6 +22,7 @@ class Kivun_Board {
 		add_action( 'rest_api_init', array( __CLASS__, 'register_rest' ) );
 		add_action( 'wp_enqueue_scripts', array( __CLASS__, 'register_assets' ) );
 		add_shortcode( 'kivun_board', array( __CLASS__, 'shortcode' ) );
+		add_shortcode( 'kivun_week', array( __CLASS__, 'week_shortcode' ) );
 	}
 
 	/* ------------------------------------------------------------------ */
@@ -108,6 +109,51 @@ class Kivun_Board {
 				),
 			)
 		);
+		register_rest_route(
+			self::REST_NS,
+			'/week',
+			array(
+				'methods'             => 'GET',
+				'permission_callback' => '__return_true',
+				'callback'            => array( __CLASS__, 'rest_week' ),
+				'args'                => array(
+					'start'    => array(
+						'type'              => 'string',
+						'required'          => false,
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+					'days'     => array(
+						'type'     => 'integer',
+						'required' => false,
+						'default'  => 7,
+					),
+					'saturday' => array(
+						'type'              => 'string',
+						'required'          => false,
+						'sanitize_callback' => 'sanitize_text_field',
+					),
+				),
+			)
+		);
+	}
+
+	/**
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public static function rest_week( $request ) {
+		Kivun_Board_Sync::maybe_run_stale();
+		$model = self::week_model( self::week_start( $request->get_param( 'start' ) ), $request->get_param( 'days' ), self::is_yes( $request->get_param( 'saturday' ) ) );
+
+		$response = new WP_REST_Response(
+			array(
+				'hash' => self::hash( $model ),
+				'now'  => self::now_ms(),
+				'html' => self::render_week_body( $model ),
+			)
+		);
+		$response->header( 'Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0' );
+		return $response;
 	}
 
 	/**
@@ -154,6 +200,76 @@ class Kivun_Board {
 		wp_enqueue_script( 'kivun-board' );
 		$date = '' !== $atts['date'] ? self::parse_date( $atts['date'] ) : self::requested_date();
 		return self::render( $date, 'embed' );
+	}
+
+	/**
+	 * [kivun_week] – the coming week: a row per day, a column per room.
+	 *
+	 * @param array $atts {
+	 *     start:    first day – any date parse_date() accepts, or "ראשון" / "sunday" for this week's Sunday. Default: today.
+	 *     days:     number of calendar days (1–14). Default: 7.
+	 *     saturday: "yes" to include Saturday. Default: hidden.
+	 *     title:    heading; its last word is shown in red. Default: "מה הכיוון השבוע?".
+	 *     subtitle: line under the heading. Default: "לו״ז שבועי".
+	 * }
+	 * @return string
+	 */
+	public static function week_shortcode( $atts ) {
+		$atts = shortcode_atts(
+			array(
+				'start'    => '',
+				'days'     => 7,
+				'saturday' => '',
+				'title'    => 'מה הכיוון השבוע?',
+				'subtitle' => 'לו״ז שבועי',
+			),
+			$atts,
+			'kivun_week'
+		);
+		self::register_assets();
+		wp_enqueue_style( 'kivun-board' );
+		wp_enqueue_script( 'kivun-board' );
+
+		$s        = Kivun_Board_Settings::all();
+		$saturday = self::is_yes( $atts['saturday'] );
+		$model    = self::week_model( self::week_start( $atts['start'] ), $atts['days'], $saturday );
+
+		$endpoint = add_query_arg(
+			array_filter(
+				array(
+					'start'    => rawurlencode( trim( (string) $atts['start'] ) ),
+					'days'     => (int) $atts['days'],
+					'saturday' => $saturday ? '1' : '',
+				)
+			),
+			rest_url( self::REST_NS . '/week' )
+		);
+
+		$style = sprintf(
+			'--kb-red:%s;--kb-dark:%s;--kb-sky:%s;',
+			esc_attr( self::color( $s['accent_color'], '#df2950' ) ),
+			esc_attr( self::color( $s['board_color'], '#2e2e31' ) ),
+			esc_attr( self::color( $s['arrow_color'], '#5cc8f0' ) )
+		);
+		$logo  = $s['logo_url'] ? $s['logo_url'] : KIVUN_BOARD_URL . 'assets/kivun-logo.png?ver=' . KIVUN_BOARD_VERSION;
+
+		$subtitle = trim( (string) $atts['subtitle'] );
+		$header   = '<header class="kb-week-header"><div class="kb-week-heading"><div class="kb-week-title">' . self::accent_title( $atts['title'] ) . '</div>';
+		if ( '' !== $subtitle ) {
+			$header .= '<div class="kb-week-subtitle">' . esc_html( $subtitle ) . '</div>';
+		}
+		$header .= '</div><img class="kb-week-logo" src="' . esc_url( $logo ) . '" alt="כיוון"></header>';
+
+		return sprintf(
+			'<div class="kb-week" dir="rtl" lang="he" style="%1$s" data-endpoint="%2$s" data-refresh="%3$d" data-hash="%4$s" data-now="%5$s"><div class="kb-week-inner">%6$s<div class="kb-week-body">%7$s</div></div></div>',
+			$style,
+			esc_url( $endpoint ),
+			max( 15, (int) $s['refresh_seconds'] ),
+			esc_attr( self::hash( $model ) ),
+			esc_attr( self::now_ms() ),
+			$header,
+			self::render_week_body( $model )
+		);
 	}
 
 	/* ------------------------------------------------------------------ */
@@ -291,6 +407,74 @@ class Kivun_Board {
 	}
 
 
+	/**
+	 * First day of the week view. "ראשון" / "sunday" is this week's Sunday
+	 * (on Saturday, the next one); anything else goes through parse_date().
+	 *
+	 * @param string|null $value Start text.
+	 * @return DateTimeImmutable
+	 */
+	public static function week_start( $value ) {
+		$value = trim( (string) $value );
+		if ( in_array( function_exists( 'mb_strtolower' ) ? mb_strtolower( $value, 'UTF-8' ) : strtolower( $value ), array( 'ראשון', 'יום ראשון', 'sunday' ), true ) ) {
+			$today = new DateTimeImmutable( 'today', wp_timezone() );
+			$w     = (int) $today->format( 'w' );
+			return 6 === $w ? $today->modify( '+1 day' ) : $today->modify( '-' . $w . ' days' );
+		}
+		return self::parse_date( $value );
+	}
+
+	/**
+	 * Board data for several days: one row per day, one cell per room, events in time order.
+	 *
+	 * @param DateTimeImmutable $start    First day.
+	 * @param int               $days     Calendar days to cover (1–14).
+	 * @param bool              $saturday Include Saturday.
+	 * @return array
+	 */
+	public static function week_model( DateTimeImmutable $start, $days, $saturday ) {
+		$days  = min( 14, max( 1, (int) $days ) );
+		$today = ( new DateTimeImmutable( 'today', wp_timezone() ) )->format( 'Y-m-d' );
+		$out   = array();
+		$first = null;
+		$last  = null;
+
+		for ( $i = 0; $i < $days; $i++ ) {
+			$day = $start->modify( '+' . $i . ' days' );
+			if ( ! $saturday && 6 === (int) $day->format( 'w' ) ) {
+				continue;
+			}
+			$first = $first ? $first : $day;
+			$last  = $day;
+			$model = self::model( $day );
+			$cells = array();
+			foreach ( $model['rows'] as $row ) {
+				$cells[] = array_merge( $row['morning'], $row['afternoon'] );
+			}
+			$out[] = array(
+				'date'       => $model['date'],
+				'day_name'   => $model['day_name'],
+				'date_label' => $day->format( 'd.m' ),
+				'today'      => $model['date'] === $today,
+				'cells'      => $cells,
+			);
+		}
+
+		$rooms = array();
+		foreach ( Kivun_Board_Settings::rooms() as $room ) {
+			$rooms[] = array(
+				'name' => $room['name'],
+				'sub'  => $room['sub'],
+			);
+		}
+
+		return array(
+			'range' => $first ? $first->format( 'd.m' ) . ' – ' . $last->format( 'd.m.Y' ) : '',
+			'rooms' => $rooms,
+			'days'  => $out,
+		);
+	}
+
 	/* ------------------------------------------------------------------ */
 	/* Rendering                                                          */
 	/* ------------------------------------------------------------------ */
@@ -368,13 +552,7 @@ class Kivun_Board {
 		$s   = Kivun_Board_Settings::all();
 		$now = time();
 
-		// Title on one line; the last word in red ("מה הכיוון *היום?*").
-		$words  = preg_split( '/\s+/u', trim( (string) $s['title'] ), -1, PREG_SPLIT_NO_EMPTY );
-		$accent = count( $words ) > 1 ? array_pop( $words ) : '';
-		$title  = esc_html( implode( ' ', $words ) );
-		if ( '' !== $accent ) {
-			$title .= ' <span class="kb-title-accent">' . esc_html( $accent ) . '</span>';
-		}
+		$title = self::accent_title( $s['title'] );
 
 		$subline = array();
 		if ( '' !== trim( (string) $s['subtitle'] ) ) {
@@ -471,6 +649,94 @@ class Kivun_Board {
 	}
 
 	/**
+	 * Week view markup below the heading (what the page refreshes): date range and the day × room table.
+	 *
+	 * @param array $model Model from self::week_model().
+	 * @return string
+	 */
+	public static function render_week_body( $model ) {
+		$now  = time();
+		$html = '<div class="kb-week-range">' . esc_html( $model['range'] ) . '</div>';
+		$html .= '<div class="kb-week-scroll"><div class="kb-week-table" style="--kb-rooms:' . (int) max( 1, count( $model['rooms'] ) ) . '">';
+		$html .= '<div class="kb-week-corner"></div>';
+		foreach ( $model['rooms'] as $room ) {
+			$html .= '<div class="kb-week-roomhead"><div class="kb-week-roomname">' . esc_html( $room['name'] ) . '</div>';
+			if ( '' !== $room['sub'] ) {
+				$html .= '<div class="kb-week-roomsub">' . esc_html( $room['sub'] ) . '</div>';
+			}
+			$html .= '</div>';
+		}
+
+		foreach ( $model['days'] as $day ) {
+			$busy  = count( array_filter( $day['cells'] ) ) > 0;
+			$html .= '<div class="kb-week-row' . ( $day['today'] ? ' kb-week-row--today' : '' ) . ( $busy ? '' : ' kb-week-row--free' ) . '">';
+			$html .= '<div class="kb-week-day"><div class="kb-week-dayname">' . esc_html( 'יום ' . $day['day_name'] ) . '</div>';
+			$html .= '<div class="kb-week-date">' . esc_html( $day['date_label'] ) . ' · <span class="kb-hebdate" data-date="' . esc_attr( $day['date'] ) . '" data-short="1">' . esc_html( self::hebrew_date( $day['date'], false ) ) . '</span></div>';
+			if ( $day['today'] ) {
+				$html .= '<div class="kb-week-todaytag">היום</div>';
+			}
+			$html .= '</div>';
+
+			foreach ( $day['cells'] as $i => $items ) {
+				$html .= '<div class="kb-week-cell' . ( $items ? '' : ' kb-week-cell--free' ) . '">';
+				$html .= '<div class="kb-week-cellroom">' . esc_html( isset( $model['rooms'][ $i ] ) ? $model['rooms'][ $i ]['name'] : '' ) . '</div>';
+				if ( ! $items ) {
+					$html .= '<div class="kb-week-free">פנוי</div>';
+				}
+				foreach ( $items as $item ) {
+					$state = '';
+					if ( $item['end'] > $item['start'] && $now >= $item['end'] ) {
+						$state = ' kb-week-event--ended';
+					} elseif ( $now >= $item['start'] && $now < $item['end'] ) {
+						$state = ' kb-week-event--live';
+					}
+					$html .= sprintf(
+						'<div class="kb-week-event%1$s" data-start="%2$d" data-end="%3$d"><div class="kb-week-time" dir="ltr">%4$s</div><div class="kb-week-name">%5$s</div></div>',
+						$state,
+						(int) $item['start'],
+						(int) $item['end'],
+						esc_html( $item['time'] ),
+						esc_html( $item['title'] )
+					);
+				}
+				$html .= '</div>';
+			}
+			if ( ! $busy ) {
+				$html .= '<div class="kb-week-nothing">אין פעילות ביום זה</div>';
+			}
+			$html .= '</div>';
+		}
+		return $html . '</div></div>';
+	}
+
+	/**
+	 * Heading with its last word in red ("מה הכיוון *היום?*").
+	 *
+	 * @param string $text Heading.
+	 * @return string Escaped HTML.
+	 */
+	private static function accent_title( $text ) {
+		$words  = preg_split( '/\s+/u', trim( (string) $text ), -1, PREG_SPLIT_NO_EMPTY );
+		$accent = count( $words ) > 1 ? array_pop( $words ) : '';
+		$title  = esc_html( implode( ' ', $words ) );
+		if ( '' !== $accent ) {
+			$title .= ' <span class="kb-title-accent">' . esc_html( $accent ) . '</span>';
+		}
+		return $title;
+	}
+
+	/**
+	 * Shortcode yes/no attribute.
+	 *
+	 * @param mixed $value Attribute value.
+	 * @return bool
+	 */
+	private static function is_yes( $value ) {
+		$value = function_exists( 'mb_strtolower' ) ? mb_strtolower( trim( (string) $value ), 'UTF-8' ) : strtolower( trim( (string) $value ) );
+		return in_array( $value, array( '1', 'yes', 'true', 'on', 'show', 'כן' ), true );
+	}
+
+	/**
 	 * Slot status. Mirrors slotState() in board.js, which re-evaluates it every 10 seconds.
 	 *
 	 * @param array[] $items Events with start / end.
@@ -500,10 +766,11 @@ class Kivun_Board {
 	 * Hebrew calendar date in Hebrew letters ("ח׳ בחשוון תשפ״ז").
 	 * board.js does the same in the browser when PHP lacks the intl extension.
 	 *
-	 * @param string $ymd Date as Y-m-d.
+	 * @param string $ymd       Date as Y-m-d.
+	 * @param bool   $with_year Include the year (the week view leaves it out).
 	 * @return string
 	 */
-	private static function hebrew_date( $ymd ) {
+	private static function hebrew_date( $ymd, $with_year = true ) {
 		if ( ! class_exists( 'IntlDateFormatter' ) ) {
 			return '';
 		}
@@ -518,7 +785,8 @@ class Kivun_Board {
 			}
 			$parts[] = $value;
 		}
-		return self::gematria( (int) $parts[0] ) . ' ב' . $parts[1] . ' ' . self::gematria( (int) $parts[2] % 1000 );
+		$text = self::gematria( (int) $parts[0] ) . ' ב' . $parts[1];
+		return $with_year ? $text . ' ' . self::gematria( (int) $parts[2] % 1000 ) : $text;
 	}
 
 	/**

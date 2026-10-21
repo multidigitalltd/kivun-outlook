@@ -497,3 +497,317 @@
 .kb-compact .kb-pages {
 	display: none;
 }
+
+/* ---- [kivun_week]: the coming week, a row per day and a column per room ---- */
+
+.kb-week {
+	--kb-red: #df2950;
+	--kb-dark: #2e2e31;
+	--kb-sky: #5cc8f0;
+	--kb-light: #f1f1f3;
+	--kb-gray: #6b6b72;
+	container-type: inline-size;
+	width: 100%;
+	direction: rtl;
+	border-radius: 32px;
+	background: var(--kb-light);
+	color: var(--kb-dark);
+	font-family: "Heebo", Arial, sans-serif;
+	line-height: 1.25;
+	-webkit-font-smoothing: antialiased;
+}
+
+.kb-week *,
+.kb-week *::before,
+.kb-week *::after {
+	box-sizing: border-box;
+}
+
+.kb-week-inner {
+	display: flex;
+	flex-direction: column;
+	gap: 18px;
+	padding: 32px;
+}
+
+.kb-week-header {
+	display: flex;
+	align-items: flex-end;
+	justify-content: space-between;
+	gap: 24px;
+	margin: 0;
+	padding: 0;
+}
+
+.kb-week-heading {
+	min-width: 0;
+}
+
+.kb-week-title {
+	color: var(--kb-dark);
+	font-family: "Rubik", "Heebo", Arial, sans-serif;
+	font-size: 56px;
+	font-weight: 900;
+	line-height: 0.95;
+}
+
+.kb-week .kb-title-accent {
+	color: var(--kb-red);
+}
+
+.kb-week-subtitle {
+	margin-top: 8px;
+	color: var(--kb-gray);
+	font-size: 22px;
+}
+
+.kb-week .kb-week-logo {
+	display: block;
+	flex: none;
+	width: auto;
+	max-width: 240px;
+	height: 64px;
+	object-fit: contain;
+}
+
+.kb-week-range {
+	color: var(--kb-gray);
+	font-size: 18px;
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+}
+
+.kb-week-scroll {
+	overflow-x: auto;
+	-webkit-overflow-scrolling: touch;
+}
+
+.kb-week-table {
+	display: grid;
+	grid-template-columns: 150px repeat(var(--kb-rooms, 5), minmax(150px, 1fr));
+	gap: 8px;
+}
+
+.kb-week-row {
+	display: contents;
+}
+
+.kb-week-roomhead {
+	padding: 4px 10px 10px;
+	border-bottom: 3px solid var(--kb-sky);
+}
+
+.kb-week-roomname {
+	font-family: "Rubik", "Heebo", Arial, sans-serif;
+	font-size: 22px;
+	font-weight: 800;
+	line-height: 1.1;
+}
+
+.kb-week-roomsub {
+	color: var(--kb-gray);
+	font-size: 14px;
+}
+
+.kb-week-day,
+.kb-week-cell {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	min-width: 0;
+	padding: 12px 14px;
+	border-radius: 20px;
+	background: #fff;
+}
+
+.kb-week-day {
+	justify-content: center;
+	gap: 2px;
+	background: var(--kb-dark);
+	color: #fff;
+}
+
+.kb-week-dayname {
+	font-family: "Rubik", "Heebo", Arial, sans-serif;
+	font-size: 20px;
+	font-weight: 800;
+}
+
+.kb-week-date {
+	font-size: 14px;
+	opacity: 0.8;
+}
+
+.kb-week-todaytag {
+	align-self: flex-start;
+	margin-top: 4px;
+	padding: 1px 10px;
+	border-radius: 999px;
+	background: #fff;
+	color: var(--kb-red);
+	font-size: 13px;
+	font-weight: 800;
+}
+
+.kb-week-row--today .kb-week-day {
+	background: var(--kb-red);
+}
+
+.kb-week-row--today .kb-week-cell {
+	box-shadow: inset 0 0 0 2px var(--kb-red);
+}
+
+.kb-week-cell--free {
+	border: 2px dashed #bfe8f8;
+	background: #f7f7f8;
+}
+
+.kb-week-cellroom,
+.kb-week-nothing {
+	display: none;
+}
+
+.kb-week-free {
+	color: #a8a8ae;
+	font-size: 16px;
+}
+
+.kb-week-event + .kb-week-event {
+	padding-top: 8px;
+	border-top: 2px solid rgba(46, 46, 49, 0.12);
+}
+
+.kb-week-time {
+	color: var(--kb-gray);
+	font-size: 14px;
+	font-weight: 500;
+	text-align: right;
+	font-variant-numeric: tabular-nums;
+}
+
+.kb-week-name {
+	font-family: "Rubik", "Heebo", Arial, sans-serif;
+	font-size: 17px;
+	font-weight: 700;
+	line-height: 1.2;
+	overflow-wrap: anywhere;
+}
+
+.kb-week-event--live {
+	margin: -4px -6px;
+	padding: 4px 6px;
+	border-radius: 12px;
+	background: var(--kb-red);
+}
+
+.kb-week-event--live + .kb-week-event {
+	margin-top: 4px;
+	border-top-color: transparent;
+}
+
+.kb-week-event--live .kb-week-time,
+.kb-week-event--live .kb-week-name {
+	color: #fff;
+}
+
+.kb-week-event--ended .kb-week-name {
+	color: #8a8a90;
+}
+
+.kb-week-event--ended .kb-week-time {
+	color: #a0a0a6;
+}
+
+/* Phones: one card per day, listing only the rooms that have classes. */
+@container (max-width: 760px) {
+	.kb-week-inner {
+		gap: 14px;
+		padding: 20px 14px;
+	}
+
+	.kb-week-header {
+		flex-direction: column-reverse;
+		align-items: flex-start;
+		gap: 12px;
+	}
+
+	.kb-week-title {
+		font-size: 38px;
+	}
+
+	.kb-week-subtitle {
+		font-size: 16px;
+	}
+
+	.kb-week .kb-week-logo {
+		height: 44px;
+	}
+
+	.kb-week-scroll {
+		overflow: visible;
+	}
+
+	.kb-week-table {
+		display: flex;
+		flex-direction: column;
+		gap: 14px;
+	}
+
+	.kb-week-corner,
+	.kb-week-roomhead,
+	.kb-week-cell--free {
+		display: none;
+	}
+
+	.kb-week-row {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		padding: 10px;
+		border-radius: 24px;
+		background: #fff;
+	}
+
+	.kb-week-row--today {
+		box-shadow: inset 0 0 0 2px var(--kb-red);
+	}
+
+	.kb-week-row--today .kb-week-cell {
+		box-shadow: none;
+	}
+
+	.kb-week-day {
+		flex-direction: row;
+		flex-wrap: wrap;
+		align-items: baseline;
+		justify-content: flex-start;
+		gap: 10px;
+		border-radius: 16px;
+	}
+
+	.kb-week-todaytag {
+		margin: 0;
+	}
+
+	.kb-week-cell {
+		padding: 10px 12px;
+		border-radius: 16px;
+		background: var(--kb-light);
+	}
+
+	.kb-week-cellroom {
+		display: block;
+		padding-bottom: 6px;
+		border-bottom: 2px solid var(--kb-sky);
+		font-family: "Rubik", "Heebo", Arial, sans-serif;
+		font-size: 17px;
+		font-weight: 800;
+	}
+
+	.kb-week-nothing {
+		display: block;
+		padding: 4px 6px 6px;
+		color: #a8a8ae;
+		font-size: 16px;
+	}
+}
