@@ -12,6 +12,9 @@ class Kivun_Board {
 	const QUERY_VAR = 'kivun_board_screen';
 	const REST_NS   = 'kivun-board/v1';
 
+	/** Longest range the week view shows (the visitor can pick one on the page). */
+	const WEEK_MAX_DAYS = 31;
+
 	const DAY_NAMES = array( 'ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת' );
 
 	public static function init() {
@@ -149,6 +152,8 @@ class Kivun_Board {
 			array(
 				'hash' => self::hash( $model ),
 				'now'  => self::now_ms(),
+				'from' => $model['from'],
+				'to'   => $model['to'],
 				'html' => self::render_week_body( $model ),
 			)
 		);
@@ -207,10 +212,11 @@ class Kivun_Board {
 	 *
 	 * @param array $atts {
 	 *     start:    first day – any date parse_date() accepts, or "ראשון" / "sunday" for this week's Sunday. Default: today.
-	 *     days:     number of calendar days (1–14). Default: 7.
+	 *     days:     number of calendar days (1–31). Default: 7.
 	 *     saturday: "yes" to include Saturday. Default: hidden.
 	 *     title:    heading; its last word is shown in red. Default: "מה הכיוון השבוע?".
 	 *     subtitle: line under the heading. Default: "לו״ז שבועי".
+	 *     controls: "no" hides the bar where visitors pick another date range. Default: shown.
 	 * }
 	 * @return string
 	 */
@@ -222,6 +228,7 @@ class Kivun_Board {
 				'saturday' => '',
 				'title'    => 'מה הכיוון השבוע?',
 				'subtitle' => 'לו״ז שבועי',
+				'controls' => 'yes',
 			),
 			$atts,
 			'kivun_week'
@@ -260,15 +267,21 @@ class Kivun_Board {
 		}
 		$header .= '</div><img class="kb-week-logo" src="' . esc_url( $logo ) . '" alt="כיוון"></header>';
 
+		$controls = self::is_yes( $atts['controls'] ) ? self::render_week_controls( $model ) : '';
+
 		return sprintf(
-			'<div class="kb-week" dir="rtl" lang="he" style="%1$s" data-endpoint="%2$s" data-refresh="%3$d" data-hash="%4$s" data-now="%5$s"><div class="kb-week-inner">%6$s<div class="kb-week-body">%7$s</div></div></div>',
+			'<div class="kb-week" dir="rtl" lang="he" style="%1$s" data-endpoint="%2$s" data-api="%8$s" data-saturday="%9$s" data-max-days="%10$d" data-refresh="%3$d" data-hash="%4$s" data-now="%5$s"><div class="kb-week-inner">%6$s%11$s<div class="kb-week-body">%7$s</div></div></div>',
 			$style,
 			esc_url( $endpoint ),
 			max( 15, (int) $s['refresh_seconds'] ),
 			esc_attr( self::hash( $model ) ),
 			esc_attr( self::now_ms() ),
 			$header,
-			self::render_week_body( $model )
+			self::render_week_body( $model ),
+			esc_url( rest_url( self::REST_NS . '/week' ) ),
+			$saturday ? '1' : '',
+			self::WEEK_MAX_DAYS,
+			$controls
 		);
 	}
 
@@ -428,12 +441,15 @@ class Kivun_Board {
 	 * Board data for several days: one row per day, one cell per room, events in time order.
 	 *
 	 * @param DateTimeImmutable $start    First day.
-	 * @param int               $days     Calendar days to cover (1–14).
+	 * @param int               $days     Calendar days to cover (1–WEEK_MAX_DAYS).
 	 * @param bool              $saturday Include Saturday.
 	 * @return array
 	 */
 	public static function week_model( DateTimeImmutable $start, $days, $saturday ) {
-		$days  = min( 14, max( 1, (int) $days ) );
+		// Stay inside the window the sync downloads, so days outside it never look free.
+		list( $min, $max ) = self::week_limits();
+		$start = $start < $min ? $min : ( $start > $max ? $max : $start );
+		$days  = min( self::WEEK_MAX_DAYS, max( 1, (int) $days ), (int) $start->diff( $max )->days + 1 );
 		$today = ( new DateTimeImmutable( 'today', wp_timezone() ) )->format( 'Y-m-d' );
 		$out   = array();
 		$first = null;
@@ -469,9 +485,24 @@ class Kivun_Board {
 		}
 
 		return array(
+			'from'  => $start->format( 'Y-m-d' ),
+			'to'    => $start->modify( '+' . ( $days - 1 ) . ' days' )->format( 'Y-m-d' ),
 			'range' => $first ? $first->format( 'd.m' ) . ' – ' . $last->format( 'd.m.Y' ) : '',
 			'rooms' => $rooms,
 			'days'  => $out,
+		);
+	}
+
+	/**
+	 * First and last day the week view can show: the days the sync keeps.
+	 *
+	 * @return DateTimeImmutable[] { first, last }
+	 */
+	public static function week_limits() {
+		$today = new DateTimeImmutable( 'today', wp_timezone() );
+		return array(
+			$today->modify( '-' . Kivun_Board_Sync::DAYS_BEFORE . ' days' ),
+			$today->modify( '+' . Kivun_Board_Sync::DAYS_AFTER . ' days' ),
 		);
 	}
 
@@ -707,6 +738,26 @@ class Kivun_Board {
 			$html .= '</div>';
 		}
 		return $html . '</div></div>';
+	}
+
+	/**
+	 * Bar where visitors pick the dates to show. board.js does the work; the table refreshes in place.
+	 *
+	 * @param array $model Model from self::week_model() (sets the initial dates).
+	 * @return string
+	 */
+	private static function render_week_controls( $model ) {
+		list( $min, $max ) = self::week_limits();
+		$limits = sprintf( ' min="%s" max="%s"', esc_attr( $min->format( 'Y-m-d' ) ), esc_attr( $max->format( 'Y-m-d' ) ) );
+		$arrow  = '<svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="%s" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
+
+		return '<div class="kb-week-controls">'
+			. '<button type="button" class="kb-week-btn kb-week-step" data-step="-1" aria-label="הטווח הקודם" title="הטווח הקודם">' . sprintf( $arrow, 'M9 6 L15 12 L9 18' ) . '</button>'
+			. '<label class="kb-week-field"><span>מתאריך</span><input type="date" class="kb-week-from" value="' . esc_attr( $model['from'] ) . '"' . $limits . '></label>'
+			. '<label class="kb-week-field"><span>עד</span><input type="date" class="kb-week-to" value="' . esc_attr( $model['to'] ) . '"' . $limits . '></label>'
+			. '<button type="button" class="kb-week-btn kb-week-step" data-step="1" aria-label="הטווח הבא" title="הטווח הבא">' . sprintf( $arrow, 'M15 6 L9 12 L15 18' ) . '</button>'
+			. '<button type="button" class="kb-week-btn kb-week-reset">היום</button>'
+			. '</div>';
 	}
 
 	/**
