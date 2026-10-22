@@ -166,7 +166,7 @@ class Kivun_Board_Admin {
 				<p>
 					<strong>מסך להקרנה:</strong>
 					<a href="<?php echo esc_url( Kivun_Board::screen_url() ); ?>" target="_blank" rel="noopener"><code><?php echo esc_html( Kivun_Board::screen_url() ); ?></code></a>
-					&nbsp;|&nbsp; <strong>שורטקוד לדף רגיל:</strong> <code>[kivun_board]</code>
+					&nbsp;|&nbsp; <strong>שורטקוד לדף רגיל:</strong> <code>[kivun_board]</code> (היום), <code>[kivun_week]</code> (ראשון–חמישי; מיום חמישי השבוע הבא)
 				</p>
 				<p>
 					<strong>סנכרון אחרון:</strong>

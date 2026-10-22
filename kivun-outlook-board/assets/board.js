@@ -171,23 +171,7 @@
 		var nowSec = Math.floor(this.now().getTime() / 1000);
 		this.drawClock();
 
-		var heb = this.stage.querySelector('.kb-hebdate');
-		if (heb && !heb.textContent && window.Intl) {
-			try {
-				var parts = (heb.getAttribute('data-date') || '').split('-');
-				var day = new Date(+parts[0], +parts[1] - 1, +parts[2], 12);
-				var fields = {};
-				var list = new Intl.DateTimeFormat('he-IL-u-ca-hebrew-nu-latn', { day: 'numeric', month: 'long', year: 'numeric' }).formatToParts(day);
-				for (var f = 0; f < list.length; f++) {
-					fields[list[f].type] = list[f].value;
-				}
-				if (fields.day && fields.month && fields.year) {
-					heb.textContent = gematria(+fields.day) + ' ב' + fields.month + ' ' + gematria(+fields.year % 1000);
-				}
-			} catch (e) {
-				// Browser without Hebrew calendar support: leave it out.
-			}
-		}
+		fillHebrewDates(this.stage);
 
 		var slots = this.stage.querySelectorAll('.kb-slot');
 		for (var i = 0; i < slots.length; i++) {
@@ -277,6 +261,95 @@
 		}, RELOAD_AFTER_MS);
 	};
 
+	/** [kivun_week]: refreshes the table (also moves to the next week on Thursday) and marks the class running now / the ones that ended. */
+	function Week(el) {
+		this.el = el;
+		this.endpoint = el.getAttribute('data-endpoint');
+		this.refresh = parseInt(el.getAttribute('data-refresh'), 10) || 60;
+		this.hash = el.getAttribute('data-hash');
+		var serverNow = +el.getAttribute('data-now');
+		this.skew = serverNow > 0 ? serverNow - Date.now() : 0;
+		this.body = el.querySelector('.kb-week-body');
+
+		var self = this;
+		this.tick();
+		setInterval(function () { self.tick(); }, 10000);
+		if (this.endpoint && this.body) {
+			setInterval(function () { self.poll(); }, this.refresh * 1000);
+		}
+	}
+
+	Week.prototype.tick = function () {
+		var nowSec = Math.floor((Date.now() + this.skew) / 1000);
+		fillHebrewDates(this.el);
+		var events = this.el.querySelectorAll('.kb-week-event');
+		for (var i = 0; i < events.length; i++) {
+			var start = +events[i].getAttribute('data-start');
+			var end = +events[i].getAttribute('data-end');
+			var ended = end > start && nowSec >= end;
+			toggleClass(events[i], 'kb-week-event--ended', ended);
+			toggleClass(events[i], 'kb-week-event--live', !ended && nowSec >= start && nowSec < end);
+		}
+	};
+
+	/** Same as Board.prototype.poll(), for the week table. */
+	Week.prototype.poll = function () {
+		var self = this;
+		var url = this.endpoint + (this.endpoint.indexOf('?') === -1 ? '?' : '&') + '_=' + Date.now();
+		var sent = Date.now();
+		var xhr = new XMLHttpRequest();
+		xhr.open('GET', url, true);
+		xhr.setRequestHeader('Accept', 'application/json');
+		xhr.onreadystatechange = function () {
+			if (xhr.readyState !== 4 || xhr.status !== 200) {
+				return;
+			}
+			try {
+				var data = JSON.parse(xhr.responseText);
+				if (data && data.now) {
+					self.skew = +data.now - (sent + Date.now()) / 2;
+				}
+				if (data && data.html && data.hash !== self.hash) {
+					self.hash = data.hash;
+					self.body.innerHTML = data.html;
+					self.tick();
+				}
+			} catch (e) {
+				// Ignore malformed responses.
+			}
+		};
+		xhr.send();
+	};
+
+	/** Fills Hebrew dates the server left empty (PHP without intl). data-short leaves out the year. */
+	function fillHebrewDates(root) {
+		if (!window.Intl) {
+			return;
+		}
+		var list = root.querySelectorAll('.kb-hebdate');
+		for (var i = 0; i < list.length; i++) {
+			var heb = list[i];
+			if (heb.textContent) {
+				continue;
+			}
+			try {
+				var parts = (heb.getAttribute('data-date') || '').split('-');
+				var day = new Date(+parts[0], +parts[1] - 1, +parts[2], 12);
+				var fields = {};
+				var tokens = new Intl.DateTimeFormat('he-IL-u-ca-hebrew-nu-latn', { day: 'numeric', month: 'long', year: 'numeric' }).formatToParts(day);
+				for (var f = 0; f < tokens.length; f++) {
+					fields[tokens[f].type] = tokens[f].value;
+				}
+				if (fields.day && fields.month && fields.year) {
+					heb.textContent = gematria(+fields.day) + ' ב' + fields.month + (heb.getAttribute('data-short') ? '' : ' ' + gematria(+fields.year % 1000));
+				}
+			} catch (e) {
+				// Browser without Hebrew calendar support: leave it out.
+				return;
+			}
+		}
+	}
+
 	var SOON_SECONDS = 60 * 60;
 	var BADGES = { live: 'עכשיו', soon: 'בקרוב', ended: 'הסתיים' };
 
@@ -351,6 +424,12 @@
 		for (var i = 0; i < boards.length; i++) {
 			if (!boards[i].kivunBoard) {
 				boards[i].kivunBoard = new Board(boards[i]);
+			}
+		}
+		var weeks = document.querySelectorAll('.kb-week');
+		for (var w = 0; w < weeks.length; w++) {
+			if (!weeks[w].kivunWeek) {
+				weeks[w].kivunWeek = new Week(weeks[w]);
 			}
 		}
 	}
