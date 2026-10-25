@@ -20,8 +20,8 @@ class Kivun_Board_Sync {
 	/** Separates the subject from the details only the week view shows. */
 	const DETAILS_SEPARATOR = '@';
 
-	/** Marks a subject the week view leaves out (daily board and screen only). */
-	const DAILY_ONLY_MARK = '#';
+	/** Separates the subject from the details only the daily board and screen show. */
+	const DAY_DETAILS_SEPARATOR = '#';
 
 	public static function init() {
 		add_filter( 'cron_schedules', array( __CLASS__, 'cron_schedules' ) );
@@ -259,21 +259,28 @@ class Kivun_Board_Sync {
 	}
 
 	/**
-	 * Splits a subject into the title and the details only the week view shows:
-	 * "סדנת אנגלית @ מימון: משרד העבודה @ 40 שעות" → "סדנת אנגלית", [ "מימון: משרד העבודה", "40 שעות" ].
-	 * A "#" anywhere keeps the event off the week view and is not shown: "# ישיבת צוות" → "ישיבת צוות", daily only.
+	 * Splits a subject into the title, the details only the week view shows (after "@")
+	 * and the details only the daily board and screen show (after "#"):
+	 * "סדנת אנגלית @ מימון: משרד העבודה @ 40 שעות # כיתה 3" → "סדנת אנגלית", [ "מימון: משרד העבודה", "40 שעות" ], [ "כיתה 3" ].
 	 *
 	 * @param string $subject Event subject.
-	 * @return array [ title, details[], daily_only ]
+	 * @return array [ title, week_details[], day_details[] ]
 	 */
 	public static function split_title( $subject ) {
-		$subject    = (string) $subject;
-		$daily_only = false !== strpos( $subject, self::DAILY_ONLY_MARK );
-		$subject    = preg_replace( '/[ \t]*' . preg_quote( self::DAILY_ONLY_MARK, '/' ) . '+[ \t]*/', ' ', $subject );
-		$parts      = array_map( 'trim', explode( self::DETAILS_SEPARATOR, $subject ) );
-		$title      = array_shift( $parts );
-		$details    = array_values( array_filter( $parts, 'strlen' ) );
-		return array( $title, $details, $daily_only );
+		$pattern = '/(' . preg_quote( self::DETAILS_SEPARATOR, '/' ) . '|' . preg_quote( self::DAY_DETAILS_SEPARATOR, '/' ) . ')/';
+		$parts   = preg_split( $pattern, (string) $subject, -1, PREG_SPLIT_DELIM_CAPTURE );
+		$title   = trim( array_shift( $parts ) );
+		$details = array(
+			self::DETAILS_SEPARATOR     => array(),
+			self::DAY_DETAILS_SEPARATOR => array(),
+		);
+		for ( $i = 0; $i + 1 < count( $parts ); $i += 2 ) {
+			$detail = trim( $parts[ $i + 1 ] );
+			if ( '' !== $detail ) {
+				$details[ $parts[ $i ] ][] = $detail;
+			}
+		}
+		return array( $title, $details[ self::DETAILS_SEPARATOR ], $details[ self::DAY_DETAILS_SEPARATOR ] );
 	}
 
 	/**
