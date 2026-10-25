@@ -126,10 +126,6 @@ class Kivun_Board_Sync {
 			if ( $hide_priv && ! empty( $event['private'] ) ) {
 				continue;
 			}
-			list( $title, $details ) = self::split_title( $event['title'] );
-			$event['title']          = $title;
-			$event['details']        = $details;
-
 			$room = self::match_room( $event, $rooms );
 			if ( null === $room ) {
 				$unmatched[] = array(
