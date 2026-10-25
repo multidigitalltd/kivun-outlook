@@ -356,6 +356,10 @@ class Kivun_Board {
 
 			// Split when shown, not when synced, so data cached before an upgrade never shows the details.
 			list( $title, $details ) = Kivun_Board_Sync::split_title( $event['title'] );
+			if ( isset( $event['details'] ) ) {
+				// Synced by 2.4.0, which stored the details apart from the title.
+				$details = array_merge( $details, (array) $event['details'] );
+			}
 
 			$slot                              = $minutes < $split ? 'morning' : 'afternoon';
 			$rows[ $event['room'] ][ $slot ][] = array(
