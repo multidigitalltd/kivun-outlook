@@ -220,10 +220,18 @@ check( 'daily byday long series', array( '2026-10-12 08:00', '2026-10-14 08:00' 
 
 // 9. Subject split into the title and the details only the week view shows.
 require __DIR__ . '/../kivun-outlook-board/includes/class-sync.php';
-check( 'split: no details', array( 'סדנת אנגלית', array() ), Kivun_Board_Sync::split_title( 'סדנת אנגלית' ) );
-check( 'split: details', array( 'סדנת אנגלית', array( 'מימון: משרד העבודה', '40 שעות' ) ), Kivun_Board_Sync::split_title( 'סדנת אנגלית @ מימון: משרד העבודה @ 40 שעות' ) );
-check( 'split: no spaces, empty parts dropped', array( 'סדנה', array( '40 שעות' ) ), Kivun_Board_Sync::split_title( 'סדנה@@40 שעות@ ' ) );
-check( 'split: details never become the title', array( '', array( 'מימון' ) ), Kivun_Board_Sync::split_title( '@ מימון' ) );
+check( 'split: no details', array( 'סדנת אנגלית', array(), false ), Kivun_Board_Sync::split_title( 'סדנת אנגלית' ) );
+check( 'split: details', array( 'סדנת אנגלית', array( 'מימון: משרד העבודה', '40 שעות' ), false ), Kivun_Board_Sync::split_title( 'סדנת אנגלית @ מימון: משרד העבודה @ 40 שעות' ) );
+check( 'split: no spaces, empty parts dropped', array( 'סדנה', array( '40 שעות' ), false ), Kivun_Board_Sync::split_title( 'סדנה@@40 שעות@ ' ) );
+check( 'split: details never become the title', array( '', array( 'מימון' ), false ), Kivun_Board_Sync::split_title( '@ מימון' ) );
+
+// 10. "#" anywhere in the subject: daily board only, and the mark is not shown.
+check( 'daily only: # first', array( 'ישיבת צוות', array(), true ), Kivun_Board_Sync::split_title( '# ישיבת צוות' ) );
+check( 'daily only: # last, no space', array( 'ישיבת צוות', array(), true ), Kivun_Board_Sync::split_title( 'ישיבת צוות#' ) );
+check( 'daily only: # between words', array( 'ישיבת צוות', array(), true ), Kivun_Board_Sync::split_title( 'ישיבת#צוות' ) );
+check( 'daily only: ## and spaces', array( 'ישיבת צוות', array(), true ), Kivun_Board_Sync::split_title( 'ישיבת  ##  צוות' ) );
+check( 'daily only: with details', array( 'סדנה', array( 'מימון' ), true ), Kivun_Board_Sync::split_title( '#סדנה @ מימון' ) );
+check( 'daily only: # in the details', array( 'סדנה', array( 'מימון' ), true ), Kivun_Board_Sync::split_title( 'סדנה @ מימון #' ) );
 
 echo $failures ? "\n$failures FAILED\n" : "\nAll tests passed\n";
 exit( $failures ? 1 : 0 );

@@ -20,6 +20,9 @@ class Kivun_Board_Sync {
 	/** Separates the subject from the details only the week view shows. */
 	const DETAILS_SEPARATOR = '@';
 
+	/** Marks a subject the week view leaves out (daily board and screen only). */
+	const DAILY_ONLY_MARK = '#';
+
 	public static function init() {
 		add_filter( 'cron_schedules', array( __CLASS__, 'cron_schedules' ) );
 		add_action( self::CRON_HOOK, array( __CLASS__, 'run' ) );
@@ -258,15 +261,19 @@ class Kivun_Board_Sync {
 	/**
 	 * Splits a subject into the title and the details only the week view shows:
 	 * "סדנת אנגלית @ מימון: משרד העבודה @ 40 שעות" → "סדנת אנגלית", [ "מימון: משרד העבודה", "40 שעות" ].
+	 * A "#" anywhere keeps the event off the week view and is not shown: "# ישיבת צוות" → "ישיבת צוות", daily only.
 	 *
 	 * @param string $subject Event subject.
-	 * @return array [ title, details[] ]
+	 * @return array [ title, details[], daily_only ]
 	 */
 	public static function split_title( $subject ) {
-		$parts   = array_map( 'trim', explode( self::DETAILS_SEPARATOR, (string) $subject ) );
-		$title   = array_shift( $parts );
-		$details = array_values( array_filter( $parts, 'strlen' ) );
-		return array( $title, $details );
+		$subject    = (string) $subject;
+		$daily_only = false !== strpos( $subject, self::DAILY_ONLY_MARK );
+		$subject    = preg_replace( '/[ \t]*' . preg_quote( self::DAILY_ONLY_MARK, '/' ) . '+[ \t]*/', ' ', $subject );
+		$parts      = array_map( 'trim', explode( self::DETAILS_SEPARATOR, $subject ) );
+		$title      = array_shift( $parts );
+		$details    = array_values( array_filter( $parts, 'strlen' ) );
+		return array( $title, $details, $daily_only );
 	}
 
 	/**

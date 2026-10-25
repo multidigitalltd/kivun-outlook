@@ -355,7 +355,7 @@ class Kivun_Board {
 			}
 
 			// Split when shown, not when synced, so data cached before an upgrade never shows the details.
-			list( $title, $details ) = Kivun_Board_Sync::split_title( $event['title'] );
+			list( $title, $details, $daily_only ) = Kivun_Board_Sync::split_title( $event['title'] );
 			if ( isset( $event['details'] ) ) {
 				// Synced by 2.4.0, which stored the details apart from the title.
 				$details = array_merge( $details, (array) $event['details'] );
@@ -363,11 +363,12 @@ class Kivun_Board {
 
 			$slot                              = $minutes < $split ? 'morning' : 'afternoon';
 			$rows[ $event['room'] ][ $slot ][] = array(
-				'title'   => $title,
-				'details' => $details,
-				'time'    => $time,
-				'start'   => (int) $event['start'],
-				'end'     => (int) $event['end'],
+				'title'      => $title,
+				'details'    => $details,
+				'daily_only' => $daily_only,
+				'time'       => $time,
+				'start'      => (int) $event['start'],
+				'end'        => (int) $event['end'],
 			);
 		}
 
@@ -409,7 +410,15 @@ class Kivun_Board {
 			$model = self::model( $day );
 			$cells = array();
 			foreach ( $model['rows'] as $row ) {
-				$cells[] = array_merge( $row['morning'], $row['afternoon'] );
+				// Subjects marked with "#" show on the daily board and screen only.
+				$cells[] = array_values(
+					array_filter(
+						array_merge( $row['morning'], $row['afternoon'] ),
+						function ( $item ) {
+							return ! $item['daily_only'];
+						}
+					)
+				);
 			}
 			$out[] = array(
 				'date'       => $model['date'],
