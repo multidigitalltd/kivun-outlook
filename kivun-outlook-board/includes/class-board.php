@@ -355,19 +355,20 @@ class Kivun_Board {
 			}
 
 			// Split when shown, not when synced, so data cached before an upgrade never shows the details.
-			list( $title, $details ) = Kivun_Board_Sync::split_title( $event['title'] );
+			list( $title, $week_details, $day_details ) = Kivun_Board_Sync::split_title( $event['title'] );
 			if ( isset( $event['details'] ) ) {
 				// Synced by 2.4.0, which stored the details apart from the title.
-				$details = array_merge( $details, (array) $event['details'] );
+				$week_details = array_merge( $week_details, (array) $event['details'] );
 			}
 
 			$slot                              = $minutes < $split ? 'morning' : 'afternoon';
 			$rows[ $event['room'] ][ $slot ][] = array(
-				'title'   => $title,
-				'details' => $details,
-				'time'    => $time,
-				'start'   => (int) $event['start'],
-				'end'     => (int) $event['end'],
+				'title'        => $title,
+				'week_details' => $week_details,
+				'day_details'  => $day_details,
+				'time'         => $time,
+				'start'        => (int) $event['start'],
+				'end'          => (int) $event['end'],
 			);
 		}
 
@@ -573,7 +574,7 @@ class Kivun_Board {
 	/**
 	 * One morning / afternoon slot of a room card.
 	 *
-	 * @param array[] $items Events of the slot: title, time, start, end.
+	 * @param array[] $items Events of the slot: title, day_details, time, start, end.
 	 * @param string  $label Slot label ("בוקר" / "אחר הצהריים").
 	 * @param int     $now   Current unix time (initial state; board.js keeps it live).
 	 * @return string
@@ -595,14 +596,22 @@ class Kivun_Board {
 			$html .= '<div class="kb-empty">פנוי</div>';
 		}
 		foreach ( $items as $item ) {
-			$ended = $now >= $item['end'] && $item['end'] > $item['start'];
+			$ended   = $now >= $item['end'] && $item['end'] > $item['start'];
+			$details = '';
+			foreach ( $item['day_details'] as $detail ) {
+				$details .= '<div class="kb-event-detail">' . esc_html( $detail ) . '</div>';
+			}
+			if ( '' !== $details ) {
+				$details = '<div class="kb-event-details">' . $details . '</div>';
+			}
 			$html .= sprintf(
-				'<div class="kb-event%1$s" data-start="%2$d" data-end="%3$d"><div class="kb-event-title">%4$s</div><div class="kb-event-time" dir="ltr">%5$s</div></div>',
+				'<div class="kb-event%1$s" data-start="%2$d" data-end="%3$d"><div class="kb-event-title">%4$s</div>%6$s<div class="kb-event-time" dir="ltr">%5$s</div></div>',
 				$ended ? ' kb-event--ended' : '',
 				(int) $item['start'],
 				(int) $item['end'],
 				esc_html( $item['title'] ),
-				esc_html( $item['time'] )
+				esc_html( $item['time'] ),
+				$details
 			);
 		}
 		return $html . '</div>';
@@ -651,7 +660,7 @@ class Kivun_Board {
 						$state = ' kb-week-event--live';
 					}
 					$details = '';
-					foreach ( $item['details'] as $detail ) {
+					foreach ( $item['week_details'] as $detail ) {
 						$details .= '<div class="kb-week-detail">' . esc_html( $detail ) . '</div>';
 					}
 					$html .= sprintf(
