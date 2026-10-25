@@ -699,6 +699,14 @@
 	overflow-wrap: anywhere;
 }
 
+.kb-week-detail {
+	margin-top: 2px;
+	color: var(--kb-gray);
+	font-size: 14px;
+	line-height: 1.25;
+	overflow-wrap: anywhere;
+}
+
 .kb-week-event--live {
 	margin: -4px -6px;
 	padding: 4px 6px;
@@ -712,7 +720,8 @@
 }
 
 .kb-week-event--live .kb-week-time,
-.kb-week-event--live .kb-week-name {
+.kb-week-event--live .kb-week-name,
+.kb-week-event--live .kb-week-detail {
 	color: #fff;
 }
 
@@ -720,7 +729,8 @@
 	color: #8a8a90;
 }
 
-.kb-week-event--ended .kb-week-time {
+.kb-week-event--ended .kb-week-time,
+.kb-week-event--ended .kb-week-detail {
 	color: #a0a0a6;
 }
 

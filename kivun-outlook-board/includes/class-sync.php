@@ -4,7 +4,7 @@
  * and caches them in an option that the board reads.
  */
 
-if ( ! defined( 'ABSPATH' ) ) {
+if ( ! defined( 'ABSPATH' ) && ! defined( 'KIVUN_BOARD_TESTING' ) ) {
 	exit;
 }
 
@@ -16,6 +16,9 @@ class Kivun_Board_Sync {
 	const LOCK         = 'kivun_board_sync_lock';
 	const DAYS_BEFORE  = 7;
 	const DAYS_AFTER   = 60;
+
+	/** Separates the subject from the details only the week view shows. */
+	const DETAILS_SEPARATOR = '@';
 
 	public static function init() {
 		add_filter( 'cron_schedules', array( __CLASS__, 'cron_schedules' ) );
@@ -123,6 +126,10 @@ class Kivun_Board_Sync {
 			if ( $hide_priv && ! empty( $event['private'] ) ) {
 				continue;
 			}
+			list( $title, $details ) = self::split_title( $event['title'] );
+			$event['title']          = $title;
+			$event['details']        = $details;
+
 			$room = self::match_room( $event, $rooms );
 			if ( null === $room ) {
 				$unmatched[] = array(
@@ -250,6 +257,20 @@ class Kivun_Board_Sync {
 			return new WP_Error( 'kivun_not_ics', 'התשובה אינה קובץ יומן ICS' );
 		}
 		return $parser->parse( $body, $from_ts, $to_ts );
+	}
+
+	/**
+	 * Splits a subject into the title and the details only the week view shows:
+	 * "סדנת אנגלית @ מימון: משרד העבודה @ 40 שעות" → "סדנת אנגלית", [ "מימון: משרד העבודה", "40 שעות" ].
+	 *
+	 * @param string $subject Event subject.
+	 * @return array [ title, details[] ]
+	 */
+	public static function split_title( $subject ) {
+		$parts   = array_map( 'trim', explode( self::DETAILS_SEPARATOR, (string) $subject ) );
+		$title   = array_shift( $parts );
+		$details = array_values( array_filter( $parts, 'strlen' ) );
+		return array( $title, $details );
 	}
 
 	/**
