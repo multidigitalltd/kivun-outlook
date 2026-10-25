@@ -356,10 +356,11 @@ class Kivun_Board {
 
 			$slot                              = $minutes < $split ? 'morning' : 'afternoon';
 			$rows[ $event['room'] ][ $slot ][] = array(
-				'title' => $event['title'],
-				'time'  => $time,
-				'start' => (int) $event['start'],
-				'end'   => (int) $event['end'],
+				'title'   => $event['title'],
+				'details' => isset( $event['details'] ) ? $event['details'] : array(),
+				'time'    => $time,
+				'start'   => (int) $event['start'],
+				'end'     => (int) $event['end'],
 			);
 		}
 
@@ -642,13 +643,18 @@ class Kivun_Board {
 					} elseif ( $now >= $item['start'] && $now < $item['end'] ) {
 						$state = ' kb-week-event--live';
 					}
+					$details = '';
+					foreach ( $item['details'] as $detail ) {
+						$details .= '<div class="kb-week-detail">' . esc_html( $detail ) . '</div>';
+					}
 					$html .= sprintf(
-						'<div class="kb-week-event%1$s" data-start="%2$d" data-end="%3$d"><div class="kb-week-time" dir="ltr">%4$s</div><div class="kb-week-name">%5$s</div></div>',
+						'<div class="kb-week-event%1$s" data-start="%2$d" data-end="%3$d"><div class="kb-week-time" dir="ltr">%4$s</div><div class="kb-week-name">%5$s</div>%6$s</div>',
 						$state,
 						(int) $item['start'],
 						(int) $item['end'],
 						esc_html( $item['time'] ),
-						esc_html( $item['title'] )
+						esc_html( $item['title'] ),
+						$details
 					);
 				}
 				$html .= '</div>';
