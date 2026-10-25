@@ -354,10 +354,17 @@ class Kivun_Board {
 				$time = wp_date( 'H:i', $event['start'] ) . ' – ' . wp_date( 'H:i', $event['end'] );
 			}
 
+			// Split when shown, not when synced, so data cached before an upgrade never shows the details.
+			list( $title, $details ) = Kivun_Board_Sync::split_title( $event['title'] );
+			if ( isset( $event['details'] ) ) {
+				// Synced by 2.4.0, which stored the details apart from the title.
+				$details = array_merge( $details, (array) $event['details'] );
+			}
+
 			$slot                              = $minutes < $split ? 'morning' : 'afternoon';
 			$rows[ $event['room'] ][ $slot ][] = array(
-				'title'   => $event['title'],
-				'details' => isset( $event['details'] ) ? $event['details'] : array(),
+				'title'   => $title,
+				'details' => $details,
 				'time'    => $time,
 				'start'   => (int) $event['start'],
 				'end'     => (int) $event['end'],
