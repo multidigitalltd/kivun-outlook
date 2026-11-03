@@ -255,6 +255,13 @@
 	overflow-wrap: anywhere;
 }
 
+.kb-event-details {
+	color: var(--kb-gray);
+	font-size: 24px;
+	line-height: 1.2;
+	overflow-wrap: anywhere;
+}
+
 .kb-event-time {
 	color: var(--kb-gray);
 	font-size: 26px;
@@ -277,6 +284,10 @@
 
 .kb-slot--multi .kb-event-time {
 	font-size: 22px;
+}
+
+.kb-slot--multi .kb-event-details {
+	font-size: 20px;
 }
 
 .kb-empty {
@@ -313,6 +324,7 @@
 
 .kb-slot--live .kb-part,
 .kb-slot--live .kb-event-title,
+.kb-slot--live .kb-event-details,
 .kb-slot--live .kb-event-time {
 	color: #fff;
 }
@@ -335,6 +347,7 @@
 	color: #5c5c63;
 }
 
+.kb-slot:not(.kb-slot--live) .kb-event--ended .kb-event-details,
 .kb-slot:not(.kb-slot--live) .kb-event--ended .kb-event-time {
 	color: #7a7a81;
 }
@@ -494,6 +507,11 @@
 	font-size: 17px;
 }
 
+.kb-compact .kb-event-details,
+.kb-compact .kb-slot--multi .kb-event-details {
+	font-size: 16px;
+}
+
 .kb-compact .kb-pages {
 	display: none;
 }
@@ -576,11 +594,55 @@
 	gap: 18px;
 }
 
+.kb-week-bar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px 16px;
+}
+
 .kb-week-range {
 	color: var(--kb-gray);
 	font-size: 18px;
 	font-weight: 700;
 	font-variant-numeric: tabular-nums;
+}
+
+.kb-week .kb-week-excel {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 18px;
+	border: 2px solid var(--kb-dark);
+	border-radius: 999px;
+	background: #fff;
+	color: var(--kb-dark);
+	font-family: "Rubik", "Heebo", Arial, sans-serif;
+	font-size: 16px;
+	font-weight: 700;
+	line-height: 1.2;
+	text-decoration: none;
+	box-shadow: none;
+	cursor: pointer;
+	transition: background-color 0.15s, color 0.15s;
+}
+
+.kb-week .kb-week-excel:hover,
+.kb-week .kb-week-excel:focus-visible {
+	background: var(--kb-dark);
+	color: #fff;
+	text-decoration: none;
+}
+
+.kb-week .kb-week-excel:focus-visible {
+	outline: 3px solid var(--kb-sky);
+	outline-offset: 2px;
+}
+
+.kb-week .kb-week-excel svg {
+	display: block;
+	flex: none;
 }
 
 .kb-week-scroll {

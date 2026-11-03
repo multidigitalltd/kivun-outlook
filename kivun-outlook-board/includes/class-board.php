@@ -14,6 +14,11 @@ class Kivun_Board {
 
 	const DAY_NAMES = array( 'ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת' );
 
+	/* [kivun_week] defaults. */
+	const WEEK_TITLE    = 'מה הכיוון השבוע?';
+	const WEEK_SUBTITLE = 'לו״ז שבועי';
+	const WEEK_EXCEL    = 'ייצוא לאקסל';
+
 	public static function init() {
 		add_action( 'init', array( __CLASS__, 'add_rewrite_rules' ) );
 		add_action( 'init', array( __CLASS__, 'maybe_flush_rewrites' ), 99 );
@@ -119,6 +124,17 @@ class Kivun_Board {
 				'callback'            => array( __CLASS__, 'rest_week' ),
 			)
 		);
+		// The Excel file of the same week, public like the week itself. title / subtitle are
+		// used only with the signature the shortcode adds, so nobody can put their own text in it.
+		register_rest_route(
+			self::REST_NS,
+			'/week/excel',
+			array(
+				'methods'             => 'GET',
+				'permission_callback' => '__return_true',
+				'callback'            => array( __CLASS__, 'rest_week_excel' ),
+			)
+		);
 	}
 
 	/**
@@ -137,6 +153,111 @@ class Kivun_Board {
 		);
 		$response->header( 'Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0' );
 		return $response;
+	}
+
+	/**
+	 * Sends the .xlsx file of the week shown now and exits.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 */
+	public static function rest_week_excel( $request ) {
+		Kivun_Board_Sync::maybe_run_stale();
+		list( $title, $subtitle ) = self::excel_heading( $request );
+
+		$week = self::week_export_data( self::week_model( self::week_start() ), $title, $subtitle );
+		$file = Kivun_Board_Week_Export::build( $week );
+		$name = Kivun_Board_Week_Export::filename( $week );
+
+		// Anything printed before (a notice, stray whitespace) would break the file.
+		while ( ob_get_level() > 0 && ob_end_clean() ) {
+			continue;
+		}
+		nocache_headers();
+		status_header( 200 );
+		header( 'Content-Type: ' . Kivun_Board_Week_Export::MIME );
+		header( 'Content-Disposition: attachment; filename="kivun-week-' . $week['days'][0]['date'] . '.xlsx"; filename*=UTF-8\'\'' . rawurlencode( $name ) );
+		header( 'Content-Length: ' . strlen( $file ) );
+		header( 'X-Content-Type-Options: nosniff' );
+		header( 'X-Robots-Tag: noindex, nofollow' );
+		echo $file; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- binary file.
+		exit;
+	}
+
+	/**
+	 * Heading of the Excel file: the shortcode's title and subtitle when the link carries
+	 * a valid signature for them, otherwise the defaults.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return string[] [ title, subtitle ]
+	 */
+	private static function excel_heading( $request ) {
+		$title    = $request->get_param( 'title' );
+		$subtitle = $request->get_param( 'subtitle' );
+		$sig      = $request->get_param( 'sig' );
+		if ( is_string( $title ) && is_string( $subtitle ) && is_string( $sig ) && hash_equals( self::excel_signature( $title, $subtitle ), $sig ) ) {
+			return array( $title, $subtitle );
+		}
+		return array( self::WEEK_TITLE, self::WEEK_SUBTITLE );
+	}
+
+	/**
+	 * @param string $title    Title.
+	 * @param string $subtitle Subtitle.
+	 * @return string
+	 */
+	private static function excel_signature( $title, $subtitle ) {
+		return substr( wp_hash( 'kivun_week_excel|' . $title . '|' . $subtitle ), 0, 16 );
+	}
+
+	/**
+	 * Link of the Excel button. The title and subtitle are added (signed) only when the shortcode changed them.
+	 *
+	 * @param string $title    Shortcode title.
+	 * @param string $subtitle Shortcode subtitle.
+	 * @return string
+	 */
+	public static function week_excel_url( $title, $subtitle ) {
+		$url = rest_url( self::REST_NS . '/week/excel' );
+		if ( self::WEEK_TITLE === $title && self::WEEK_SUBTITLE === $subtitle ) {
+			return $url;
+		}
+		return add_query_arg(
+			array(
+				'title'    => rawurlencode( $title ),
+				'subtitle' => rawurlencode( $subtitle ),
+				'sig'      => self::excel_signature( $title, $subtitle ),
+			),
+			$url
+		);
+	}
+
+	/**
+	 * What Kivun_Board_Week_Export::build() needs: the week model plus the heading, Hebrew dates and colors.
+	 *
+	 * @param array  $model    Model from self::week_model().
+	 * @param string $title    Heading.
+	 * @param string $subtitle Line under the heading.
+	 * @return array
+	 */
+	public static function week_export_data( $model, $title, $subtitle ) {
+		$s = Kivun_Board_Settings::all();
+		foreach ( $model['days'] as $i => $day ) {
+			$model['days'][ $i ]['heb'] = self::hebrew_date( $day['date'], false );
+			// The details the week view shows (after "@"); the ones after "#" are for the daily board only.
+			foreach ( $day['cells'] as $c => $items ) {
+				foreach ( $items as $n => $item ) {
+					$model['days'][ $i ]['cells'][ $c ][ $n ]['details'] = $item['week_details'];
+				}
+			}
+		}
+		$model['title']    = $title;
+		$model['subtitle'] = $subtitle;
+		$model['colors']   = array(
+			'red'  => self::color( $s['accent_color'], '#df2950' ),
+			'dark' => self::color( $s['board_color'], '#2e2e31' ),
+			'sky'  => self::color( $s['arrow_color'], '#5cc8f0' ),
+		);
+		return $model;
 	}
 
 	/**
@@ -192,14 +313,16 @@ class Kivun_Board {
 	 * @param array $atts {
 	 *     title:    heading; its last word is shown in red. Default: "מה הכיוון השבוע?".
 	 *     subtitle: line under the heading. Default: "לו״ז שבועי".
+	 *     excel:    text of the button that downloads the week as an Excel file; empty hides it. Default: "ייצוא לאקסל".
 	 * }
 	 * @return string
 	 */
 	public static function week_shortcode( $atts ) {
 		$atts = shortcode_atts(
 			array(
-				'title'    => 'מה הכיוון השבוע?',
-				'subtitle' => 'לו״ז שבועי',
+				'title'    => self::WEEK_TITLE,
+				'subtitle' => self::WEEK_SUBTITLE,
+				'excel'    => self::WEEK_EXCEL,
 			),
 			$atts,
 			'kivun_week'
@@ -226,6 +349,16 @@ class Kivun_Board {
 		}
 		$header .= '</div><img class="kb-week-logo" src="' . esc_url( $logo ) . '" alt="כיוון"></header>';
 
+		$excel  = trim( (string) $atts['excel'] );
+		$button = '';
+		if ( '' !== $excel ) {
+			$button = sprintf(
+				'<a class="kb-week-excel" href="%1$s" download rel="nofollow"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4 V15 M7 10.5 L12 15.5 L17 10.5 M5 19.5 H19" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path></svg><span>%2$s</span></a>',
+				esc_url( self::week_excel_url( (string) $atts['title'], (string) $atts['subtitle'] ) ),
+				esc_html( $excel )
+			);
+		}
+
 		return sprintf(
 			'<div class="kb-week" dir="rtl" lang="he" style="%1$s" data-endpoint="%2$s" data-refresh="%3$d" data-hash="%4$s" data-now="%5$s"><div class="kb-week-inner">%6$s<div class="kb-week-body">%7$s</div></div></div>',
 			$style,
@@ -234,7 +367,7 @@ class Kivun_Board {
 			esc_attr( self::hash( $model ) ),
 			esc_attr( self::now_ms() ),
 			$header,
-			self::render_week_body( $model )
+			self::render_week_body( $model, $button )
 		);
 	}
 
@@ -355,19 +488,20 @@ class Kivun_Board {
 			}
 
 			// Split when shown, not when synced, so data cached before an upgrade never shows the details.
-			list( $title, $details ) = Kivun_Board_Sync::split_title( $event['title'] );
+			list( $title, $week_details, $day_details ) = Kivun_Board_Sync::split_title( $event['title'] );
 			if ( isset( $event['details'] ) ) {
 				// Synced by 2.4.0, which stored the details apart from the title.
-				$details = array_merge( $details, (array) $event['details'] );
+				$week_details = array_merge( $week_details, (array) $event['details'] );
 			}
 
 			$slot                              = $minutes < $split ? 'morning' : 'afternoon';
 			$rows[ $event['room'] ][ $slot ][] = array(
-				'title'   => $title,
-				'details' => $details,
-				'time'    => $time,
-				'start'   => (int) $event['start'],
-				'end'     => (int) $event['end'],
+				'title'        => $title,
+				'week_details' => $week_details,
+				'day_details'  => $day_details,
+				'time'         => $time,
+				'start'        => (int) $event['start'],
+				'end'          => (int) $event['end'],
 			);
 		}
 
@@ -573,7 +707,7 @@ class Kivun_Board {
 	/**
 	 * One morning / afternoon slot of a room card.
 	 *
-	 * @param array[] $items Events of the slot: title, time, start, end.
+	 * @param array[] $items Events of the slot: title, day_details, time, start, end.
 	 * @param string  $label Slot label ("בוקר" / "אחר הצהריים").
 	 * @param int     $now   Current unix time (initial state; board.js keeps it live).
 	 * @return string
@@ -595,14 +729,22 @@ class Kivun_Board {
 			$html .= '<div class="kb-empty">פנוי</div>';
 		}
 		foreach ( $items as $item ) {
-			$ended = $now >= $item['end'] && $item['end'] > $item['start'];
+			$ended   = $now >= $item['end'] && $item['end'] > $item['start'];
+			$details = '';
+			foreach ( $item['day_details'] as $detail ) {
+				$details .= '<div class="kb-event-detail">' . esc_html( $detail ) . '</div>';
+			}
+			if ( '' !== $details ) {
+				$details = '<div class="kb-event-details">' . $details . '</div>';
+			}
 			$html .= sprintf(
-				'<div class="kb-event%1$s" data-start="%2$d" data-end="%3$d"><div class="kb-event-title">%4$s</div><div class="kb-event-time" dir="ltr">%5$s</div></div>',
+				'<div class="kb-event%1$s" data-start="%2$d" data-end="%3$d"><div class="kb-event-title">%4$s</div>%6$s<div class="kb-event-time" dir="ltr">%5$s</div></div>',
 				$ended ? ' kb-event--ended' : '',
 				(int) $item['start'],
 				(int) $item['end'],
 				esc_html( $item['title'] ),
-				esc_html( $item['time'] )
+				esc_html( $item['time'] ),
+				$details
 			);
 		}
 		return $html . '</div>';
@@ -611,12 +753,13 @@ class Kivun_Board {
 	/**
 	 * Week view markup below the heading (what the page refreshes): date range and the day × room table.
 	 *
-	 * @param array $model Model from self::week_model().
+	 * @param array  $model  Model from self::week_model().
+	 * @param string $button Excel button for the bar next to the dates (board.js keeps it when it refreshes the rest).
 	 * @return string
 	 */
-	public static function render_week_body( $model ) {
+	public static function render_week_body( $model, $button = '' ) {
 		$now  = time();
-		$html = '<div class="kb-week-range">' . esc_html( $model['range'] ) . '</div>';
+		$html = '<div class="kb-week-bar"><div class="kb-week-range">' . esc_html( $model['range'] ) . '</div>' . $button . '</div>';
 		$html .= '<div class="kb-week-scroll"><div class="kb-week-table" style="--kb-rooms:' . (int) max( 1, count( $model['rooms'] ) ) . '">';
 		$html .= '<div class="kb-week-corner"></div>';
 		foreach ( $model['rooms'] as $room ) {
@@ -651,7 +794,7 @@ class Kivun_Board {
 						$state = ' kb-week-event--live';
 					}
 					$details = '';
-					foreach ( $item['details'] as $detail ) {
+					foreach ( $item['week_details'] as $detail ) {
 						$details .= '<div class="kb-week-detail">' . esc_html( $detail ) . '</div>';
 					}
 					$html .= sprintf(
