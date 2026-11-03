@@ -218,12 +218,16 @@ ICS
 $ev = $parser->parse( $ics, ts( '2026-10-11 00:00' ), ts( '2026-10-18 00:00' ) );
 check( 'daily byday long series', array( '2026-10-12 08:00', '2026-10-14 08:00' ), starts( $ev ) );
 
-// 9. Subject split into the title and the details only the week view shows.
+// 9. Subject split into the title, the details only the week view shows (@) and the ones only the daily board shows (#).
 require __DIR__ . '/../kivun-outlook-board/includes/class-sync.php';
-check( 'split: no details', array( 'סדנת אנגלית', array() ), Kivun_Board_Sync::split_title( 'סדנת אנגלית' ) );
-check( 'split: details', array( 'סדנת אנגלית', array( 'מימון: משרד העבודה', '40 שעות' ) ), Kivun_Board_Sync::split_title( 'סדנת אנגלית @ מימון: משרד העבודה @ 40 שעות' ) );
-check( 'split: no spaces, empty parts dropped', array( 'סדנה', array( '40 שעות' ) ), Kivun_Board_Sync::split_title( 'סדנה@@40 שעות@ ' ) );
-check( 'split: details never become the title', array( '', array( 'מימון' ) ), Kivun_Board_Sync::split_title( '@ מימון' ) );
+check( 'split: no details', array( 'סדנת אנגלית', array(), array() ), Kivun_Board_Sync::split_title( 'סדנת אנגלית' ) );
+check( 'split: details', array( 'סדנת אנגלית', array( 'מימון: משרד העבודה', '40 שעות' ), array() ), Kivun_Board_Sync::split_title( 'סדנת אנגלית @ מימון: משרד העבודה @ 40 שעות' ) );
+check( 'split: no spaces, empty parts dropped', array( 'סדנה', array( '40 שעות' ), array() ), Kivun_Board_Sync::split_title( 'סדנה@@40 שעות@ ' ) );
+check( 'split: details never become the title', array( '', array( 'מימון' ), array() ), Kivun_Board_Sync::split_title( '@ מימון' ) );
+check( 'split: day details', array( 'סדנת אנגלית', array(), array( 'כיתה 3', 'להביא מחשב' ) ), Kivun_Board_Sync::split_title( 'סדנת אנגלית # כיתה 3 # להביא מחשב' ) );
+check( 'split: week and day details mixed', array( 'סדנה', array( 'מימון', '40 שעות' ), array( 'כיתה 3' ) ), Kivun_Board_Sync::split_title( 'סדנה @ מימון # כיתה 3 @ 40 שעות' ) );
+check( 'split: day details, no spaces, empty parts dropped', array( 'סדנה', array(), array( 'כיתה 3' ) ), Kivun_Board_Sync::split_title( 'סדנה##כיתה 3#' ) );
+check( 'split: day details never become the title', array( '', array(), array( 'כיתה 3' ) ), Kivun_Board_Sync::split_title( '# כיתה 3' ) );
 
 echo $failures ? "\n$failures FAILED\n" : "\nAll tests passed\n";
 exit( $failures ? 1 : 0 );
