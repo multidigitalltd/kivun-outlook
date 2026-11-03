@@ -311,7 +311,13 @@
 				}
 				if (data && data.html && data.hash !== self.hash) {
 					self.hash = data.hash;
+					// The server sends the table without the Excel button: move the button over to the new bar.
+					var button = self.body.querySelector('.kb-week-excel');
 					self.body.innerHTML = data.html;
+					var bar = self.body.querySelector('.kb-week-bar');
+					if (button && bar) {
+						bar.appendChild(button);
+					}
 					self.tick();
 				}
 			} catch (e) {
